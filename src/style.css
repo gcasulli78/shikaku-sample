@@ -1,0 +1,369 @@
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --text: #1f2328;
+  --muted: #6a6f76;
+  --line: #d6d3cb;
+  --grid: #e4e1d9;
+  --accent: #3b6fc4;
+  --accent-text: #ffffff;
+  --bad: #c2483d;
+  --rect-s: 68%;
+  --rect-l: 84%;
+  --rect-edge-l: 45%;
+  --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 6%);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --surface: #1e2125;
+    --text: #e8e6e1;
+    --muted: #9aa0a7;
+    --line: #3a3f45;
+    --grid: #2b2f34;
+    --accent: #6f9be6;
+    --accent-text: #0f1420;
+    --bad: #e2766c;
+    --rect-s: 38%;
+    --rect-l: 30%;
+    --rect-edge-l: 62%;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #15171a;
+  --surface: #1e2125;
+  --text: #e8e6e1;
+  --muted: #9aa0a7;
+  --line: #3a3f45;
+  --grid: #2b2f34;
+  --accent: #6f9be6;
+  --accent-text: #0f1420;
+  --bad: #e2766c;
+  --rect-s: 38%;
+  --rect-l: 30%;
+  --rect-edge-l: 62%;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 12px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0;
+  flex: 1;
+  letter-spacing: 0.02em;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  color: var(--muted);
+  min-width: 3.5em;
+  text-align: right;
+}
+
+.controls,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.actions {
+  justify-content: center;
+}
+
+.custom {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+}
+
+.custom[hidden] {
+  display: none;
+}
+
+.times {
+  padding-bottom: 8px;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.field.small input {
+  width: 4.2em;
+}
+
+select,
+input,
+.btn,
+.icon-btn {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-height: 38px;
+}
+
+.btn,
+.icon-btn {
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled),
+.icon-btn:hover {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.icon-btn {
+  width: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.status {
+  margin: -4px 0 0;
+  min-height: 1.3em;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.status .level {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.board-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.board.busy {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.board {
+  --cols: 5;
+  --rows: 5;
+  /* Lato massimo: larghezza disponibile, ma anche l'altezza dello schermo. */
+  width: min(100%, calc((100dvh - 330px) * var(--cols) / var(--rows)));
+  min-width: min(100%, 220px);
+  aspect-ratio: var(--cols) / var(--rows);
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  background: var(--surface);
+  border: 2px solid var(--text);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  touch-action: none;
+  user-select: none;
+  container-type: inline-size;
+  position: relative;
+  cursor: crosshair;
+}
+
+.cell {
+  border-right: 1px solid var(--grid);
+  border-bottom: 1px solid var(--grid);
+  pointer-events: none;
+}
+
+.clue {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: calc(100cqw / var(--cols) * 0.48);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cell.last-col {
+  border-right: none;
+}
+
+.cell.last-row {
+  border-bottom: none;
+}
+
+.rect {
+  z-index: 1;
+  margin: 2px;
+  border-radius: 4px;
+  pointer-events: none;
+  border: 2px dashed var(--muted);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+.rect.valid {
+  border: 2px solid hsl(var(--h) 55% var(--rect-edge-l));
+  background: hsl(var(--h) var(--rect-s) var(--rect-l));
+}
+
+.rect.bad {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.rect.hinted {
+  animation: pop 0.5s ease-out;
+}
+
+.preview {
+  z-index: 3;
+  margin: 1px;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+  display: grid;
+  place-items: end;
+  padding: 2px 5px;
+  font-size: max(11px, calc(100cqw / var(--cols) * 0.26));
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.preview.blocked {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+  color: var(--bad);
+}
+
+.rect.removed {
+  animation: vanish 0.8s ease-in forwards;
+}
+
+@keyframes vanish {
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.board.solved {
+  border-color: var(--accent);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0.3;
+  }
+}
+
+.help {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 20px 24px;
+  box-shadow: var(--shadow);
+  max-width: min(90vw, 340px);
+  text-align: center;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 35%);
+}
+
+dialog h2 {
+  margin: 0 0 8px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rect.hinted {
+    animation: none;
+  }
+
+  .rect.removed {
+    animation: vanish 0.8s step-end forwards;
+  }
+}

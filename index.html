@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Shikaku</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='2' fill='%234a7bd0'/%3E%3Cpath d='M8 1v14M1 8h7' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="top">
+        <h1>Shikaku</h1>
+        <span class="timer" id="timer" aria-label="Tempo">0:00</span>
+        <button type="button" class="icon-btn" id="theme" title="Tema" aria-label="Cambia tema"></button>
+      </header>
+
+      <section class="controls" aria-label="Nuova partita">
+        <label class="field">
+          <span>Griglia</span>
+          <select id="size"></select>
+        </label>
+        <div class="custom" id="custom" hidden>
+          <label class="field small">
+            <span>Righe</span>
+            <input type="number" id="rows" inputmode="numeric" />
+          </label>
+          <span class="times">×</span>
+          <label class="field small">
+            <span>Colonne</span>
+            <input type="number" id="cols" inputmode="numeric" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Difficoltà</span>
+          <select id="difficulty"></select>
+        </label>
+        <button type="button" class="btn primary" id="new">Nuova partita</button>
+      </section>
+
+      <p class="status" id="status" aria-live="polite"></p>
+
+      <div class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Griglia di gioco"></div>
+      </div>
+
+      <section class="actions" aria-label="Azioni">
+        <button type="button" class="btn" id="undo" title="Annulla (Ctrl+Z)" disabled>Annulla</button>
+        <button type="button" class="btn" id="clear" disabled>Cancella</button>
+        <button type="button" class="btn" id="hint" disabled>Suggerimento</button>
+      </section>
+
+      <p class="help">
+        Trascina per disegnare un rettangolo: deve contenere un solo numero ed avere tante caselle quanto quel numero.
+        I rettangoli non possono sovrapporsi: tocca un rettangolo per toglierlo, tocca un 1 per chiuderlo.
+        Il suggerimento toglie prima i rettangoli sbagliati, poi ne aggiunge uno giusto.
+      </p>
+    </main>
+
+    <dialog id="win" aria-labelledby="win-title">
+      <h2 id="win-title">Risolto!</h2>
+      <p id="win-text"></p>
+      <form method="dialog" class="dialog-actions">
+        <button class="btn" value="close">Chiudi</button>
+        <button class="btn primary" value="new">Nuova partita</button>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
