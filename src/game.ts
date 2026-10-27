@@ -37,6 +37,25 @@ export class Game {
     return inside.length === 1 && inside[0]!.n === area(rect);
   }
 
+  /** "bad" se è sicuramente sbagliato (più numeri, o più grande del suo numero); "open" se è ancora incerto. */
+  status(rect: Rect): "valid" | "bad" | "open" {
+    if (this.isValid(rect)) return "valid";
+    const inside = this.cluesIn(rect);
+    return inside.length > 1 || (inside.length === 1 && inside[0]!.n < area(rect)) ? "bad" : "open";
+  }
+
+  /**
+   * Cosa fa un trascinamento che disegna rect: un tap (1×1) toglie il rettangolo sotto
+   * o chiude un "1", altrimenti non fa niente; un rettangolo più grande si posa se è libero.
+   */
+  intent(rect: Rect): "remove" | "place" | "blocked" | "none" {
+    if (area(rect) === 1) {
+      if (this.rectAt(rect.r, rect.c)) return "remove";
+      return this.cluesIn(rect).some((clue) => clue.n === 1) ? "place" : "none";
+    }
+    return this.canPlace(rect) ? "place" : "blocked";
+  }
+
   rectAt(r: number, c: number): Rect | undefined {
     return this.rects.find((rect) => contains(rect, r, c));
   }
@@ -70,7 +89,7 @@ export class Game {
   }
 
   /** Rettangoli posati che non fanno parte della soluzione. */
-  wrong(): Rect[] {
+  private wrong(): Rect[] {
     return this.rects.filter((rect) => !this.puzzle.solution.some((sol) => sameRect(rect, sol)));
   }
 

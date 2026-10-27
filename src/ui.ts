@@ -1,6 +1,7 @@
 import { formatTime, Game, Timer, type Hint } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import {
+  area,
   availableDifficulties,
   clampSize,
   DIFFICULTIES,
@@ -91,42 +92,27 @@ function createGenerator(): (options: GenerateOptions) => Promise<GenerateResult
     });
 }
 
-function loadSettings(): Settings {
-  const defaults: Settings = { sizeId: "8x8", custom: { rows: 6, cols: 8 }, difficulty: "medium", theme: "auto" };
+/** Oggetto salvato in localStorage, unito ai valori predefiniti. */
+function readJson<T extends object>(key: string, defaults: T): T {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<Settings>;
-    return { ...defaults, ...saved };
+    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "{}");
+    return typeof saved === "object" && saved !== null ? { ...defaults, ...saved } : defaults;
   } catch {
     return defaults;
   }
 }
 
-function saveSettings(settings: Settings): void {
+function writeJson(key: string, value: unknown): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Storage non disponibile (navigazione privata, file://): si perde solo la preferenza.
+    // Storage non disponibile (navigazione privata, file://): si perde solo ciò che si voleva ricordare.
   }
 }
+
+const DEFAULT_SETTINGS: Settings = { sizeId: "8x8", custom: { rows: 6, cols: 8 }, difficulty: "medium", theme: "auto" };
 
 type Ready = Record<string, GenerateResult>;
-
-function loadReady(): Ready {
-  try {
-    const saved = JSON.parse(localStorage.getItem(READY_KEY) ?? "{}") as Ready;
-    return typeof saved === "object" && saved !== null ? saved : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveReady(ready: Ready): void {
-  try {
-    localStorage.setItem(READY_KEY, JSON.stringify(ready));
-  } catch {
-    // Senza storage i puzzle pronti restano solo in memoria.
-  }
-}
 
 function $<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -180,7 +166,7 @@ function gridArea(el: HTMLElement, rect: Rect): void {
 }
 
 export function startApp(): void {
-  const settings = loadSettings();
+  const settings = readJson(STORAGE_KEY, DEFAULT_SETTINGS);
   const board = $<HTMLDivElement>("board");
   const sizeSelect = $<HTMLSelectElement>("size");
   const difficultySelect = $<HTMLSelectElement>("difficulty");
@@ -201,7 +187,7 @@ export function startApp(): void {
   const generateAsync = createGenerator();
   // Un secondo Worker per preparare in anticipo: non viene annullato dalle partite nuove.
   const prefetchAsync = createGenerator();
-  const ready = loadReady();
+  const ready = readJson<Ready>(READY_KEY, {});
   let pending: { key: string; promise: Promise<GenerateResult | undefined> } | undefined;
   // Assegnata alla prima generazione; fino ad allora i comandi sono disattivati.
   let game!: Game;
@@ -220,7 +206,7 @@ export function startApp(): void {
   };
   themeBtn.addEventListener("click", () => {
     settings.theme = NEXT_THEME[settings.theme];
-    saveSettings(settings);
+    writeJson(STORAGE_KEY, settings);
     applyTheme();
   });
   applyTheme();
@@ -265,40 +251,42 @@ export function startApp(): void {
   // --- Puzzle pronti in anticipo ---
   const readyKey = (size: Size, d: Difficulty) => `${size.rows}x${size.cols}:${d}`;
 
-  const store = (key: string, puzzle: GenerateResult) => {
+  const optionsFor = (size: Size, d: Difficulty, timeFactor = 1): GenerateOptions => ({
+    ...size,
+    difficulty: d,
+    maxCandidates: 10_000,
+    timeLimitMs: timeFactor * TIME_LIMITS[d],
+  });
+
+  /** Conserva un puzzle per dopo, solo se è di un livello lento e proprio del livello chiesto. */
+  const store = (size: Size, d: Difficulty, puzzle: GenerateResult) => {
+    if (!PREFETCH.includes(d) || puzzle.difficulty !== d || !puzzle.logical) return;
+    const key = readyKey(size, d);
     delete ready[key];
     ready[key] = puzzle;
     const keys = Object.keys(ready);
     for (const old of keys.slice(0, Math.max(0, keys.length - MAX_READY))) delete ready[old];
-    saveReady(ready);
+    writeJson(READY_KEY, ready);
   };
 
   /** Prepara in background il prossimo puzzle di un livello lento, se non ce n'è già uno. */
   const prefetch = (size: Size, d: Difficulty) => {
     const key = readyKey(size, d);
     if (!PREFETCH.includes(d) || ready[key] || pending?.key === key) return;
-    const promise = prefetchAsync({ ...size, difficulty: d, maxCandidates: 10_000, timeLimitMs: 2 * TIME_LIMITS[d] });
+    const promise = prefetchAsync(optionsFor(size, d, 2));
     pending = { key, promise };
     void promise.then((puzzle) => {
       if (pending?.promise === promise) pending = undefined;
-      // Si conserva solo se è del livello giusto: altrimenti la prossima volta si riprova.
-      if (puzzle?.difficulty === d) store(key, puzzle);
+      if (puzzle) store(size, d, puzzle);
     });
   };
 
-  /** Puzzle pronto (anche in preparazione), altrimenti generato al momento. */
+  /** Puzzle pronto (anche in preparazione), altrimenti generato al momento. Non lo toglie dai pronti. */
   const obtain = async (size: Size, d: Difficulty) => {
     const key = readyKey(size, d);
     if (!ready[key] && pending?.key === key) await pending.promise;
-    const hit = ready[key];
-    if (hit) {
-      delete ready[key];
-      saveReady(ready);
-      return hit;
-    }
-    return generateAsync({ ...size, difficulty: d, maxCandidates: 10_000, timeLimitMs: TIME_LIMITS[d] });
+    return ready[key] ?? generateAsync(optionsFor(size, d));
   };
-  syncDifficulties();
 
   const setStatus = (html: string) => {
     statusEl.innerHTML = html;
@@ -313,7 +301,7 @@ export function startApp(): void {
     settings.sizeId = sizeSelect.value;
     settings.difficulty = chosen;
     if (settings.sizeId === CUSTOM) settings.custom = size;
-    saveSettings(settings);
+    writeJson(STORAGE_KEY, settings);
 
     const id = ++request;
     newBtn.disabled = true;
@@ -323,8 +311,13 @@ export function startApp(): void {
     if (!puzzle) return;
     if (id !== request) {
       // Nel frattempo è stata chiesta un'altra partita: un puzzle buono si tiene per dopo.
-      if (puzzle.difficulty === target && PREFETCH.includes(target)) store(readyKey(size, target), puzzle);
+      store(size, target, puzzle);
       return;
+    }
+    const key = readyKey(size, target);
+    if (ready[key] === puzzle) {
+      delete ready[key];
+      writeJson(READY_KEY, ready);
     }
     newBtn.disabled = false;
     board.classList.remove("busy");
@@ -342,6 +335,7 @@ export function startApp(): void {
 
     let note = "";
     if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
+    else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
     setStatus(`<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${note}`);
     render();
@@ -350,8 +344,9 @@ export function startApp(): void {
 
   sizeSelect.addEventListener("change", () => {
     syncCustom();
-    syncDifficulties();
-    if (sizeSelect.value !== CUSTOM) void newGame();
+    // newGame sincronizza da sé le difficoltà; con Personalizzata la partita parte solo su richiesta.
+    if (sizeSelect.value === CUSTOM) syncDifficulties();
+    else void newGame();
   });
   difficultySelect.addEventListener("change", () => void newGame());
   for (const input of [rowsInput, colsInput]) {
@@ -389,14 +384,9 @@ export function startApp(): void {
       const el = document.createElement("div");
       el.className = "rect";
       gridArea(el, rect);
-      const inside = game.cluesIn(rect);
-      if (game.isValid(rect)) {
-        el.classList.add("valid");
-        el.style.setProperty("--h", String(hues[clues.indexOf(inside[0]!)]));
-      } else if (inside.length > 1 || (inside.length === 1 && inside[0]!.n < rect.h * rect.w)) {
-        // Sicuramente sbagliato: troppi numeri o troppo grande.
-        el.classList.add("bad");
-      }
+      const status = game.status(rect);
+      if (status !== "open") el.classList.add(status);
+      if (status === "valid") el.style.setProperty("--h", String(hues[clues.indexOf(game.cluesIn(rect)[0]!)]));
       if (lastHint && "placed" in lastHint && sameRect(rect, lastHint.placed)) el.classList.add("hinted");
       board.append(el);
     });
@@ -438,10 +428,8 @@ export function startApp(): void {
       board.append(preview);
     }
     gridArea(preview, rect);
-    // Rosso se si sovrappone a un rettangolo esistente (il tap su un rettangolo invece lo toglie).
-    const tap = rect.h === 1 && rect.w === 1;
-    preview.classList.toggle("blocked", !tap && !game.canPlace(rect));
-    preview.textContent = rect.h * rect.w > 1 ? `${rect.h}×${rect.w}=${rect.h * rect.w}` : "";
+    preview.classList.toggle("blocked", game.intent(rect) === "blocked");
+    preview.textContent = area(rect) > 1 ? `${rect.h}×${rect.w}=${area(rect)}` : "";
   };
 
   const afterMove = () => {
@@ -494,26 +482,26 @@ export function startApp(): void {
     if (!commit) return render();
 
     const rect = rectFromCorners(...start, ...end);
-    const existing = game.rectAt(...start);
-    const tap = rect.h === 1 && rect.w === 1;
-    // Un click su una casella libera crea un 1×1 solo se lì c'è il numero 1.
-    if (tap && !existing && !game.cluesIn(rect).some((clue) => clue.n === 1)) return render();
+    const intent = game.intent(rect);
+    // "blocked" e "none": la griglia non cambia, quindi né cronometro né suggerimento evidenziato.
+    if (intent === "remove") game.remove(game.rectAt(...start)!);
+    else if (intent === "place") game.place(rect);
+    else return render();
 
     firstInput();
     lastHint = undefined;
-    if (tap && existing) game.remove(existing);
-    else game.place(rect); // rifiutato se si sovrappone: le aree esistenti restano
     afterMove();
   };
   board.addEventListener("pointerup", (e) => endDrag(e, true));
   board.addEventListener("pointercancel", (e) => endDrag(e, false));
 
   // --- Azioni ---
-  undoBtn.addEventListener("click", () => {
+  const undo = () => {
     game.undo();
     lastHint = undefined;
     render();
-  });
+  };
+  undoBtn.addEventListener("click", undo);
   clearBtn.addEventListener("click", () => {
     game.clear();
     lastHint = undefined;
@@ -528,8 +516,7 @@ export function startApp(): void {
     if (!game || solved || e.target instanceof HTMLInputElement) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
-      game.undo();
-      render();
+      undo();
     }
   });
 

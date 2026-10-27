@@ -39,6 +39,25 @@ describe("Game", () => {
     expect(game.canUndo).toBe(false);
   });
 
+  it("intent: tap toglie o chiude un 1, trascinamento posa solo se libero", () => {
+    const ones: Puzzle = { rows: 1, cols: 3, clues: [{ r: 0, c: 0, n: 1 }, { r: 0, c: 2, n: 2 }], solution: [] };
+    const game = new Game(ones);
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // c'è il numero 1
+    expect(game.intent({ r: 0, c: 1, h: 1, w: 1 })).toBe("none"); // casella libera qualsiasi
+    game.place({ r: 0, c: 1, h: 1, w: 2 });
+    expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("remove");
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 2 })).toBe("blocked");
+  });
+
+  it("status: valido, sicuramente sbagliato o ancora aperto", () => {
+    const game = new Game(puzzle);
+    expect(game.status({ r: 0, c: 0, h: 2, w: 1 })).toBe("valid");
+    expect(game.status({ r: 0, c: 0, h: 2, w: 3 })).toBe("bad"); // due numeri
+    expect(game.status({ r: 0, c: 0, h: 1, w: 3 })).toBe("bad"); // più grande del 2
+    expect(game.status({ r: 0, c: 0, h: 1, w: 1 })).toBe("open"); // più piccolo: si può allargare
+    expect(game.status({ r: 0, c: 1, h: 1, w: 1 })).toBe("open"); // nessun numero
+  });
+
   it("dopo aver tolto un rettangolo lo spazio torna libero", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 1, w: 2 });

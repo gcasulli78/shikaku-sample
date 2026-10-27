@@ -52,7 +52,7 @@ export const DIFFICULTIES: { id: Difficulty; label: string }[] = [
  * (misurato per Esperto: 0/30 a 5×5, 2/15 a 4×15, 13/15 a 7×7 con 3 s;
  * per Maestro: 6/8 a 7×7, 8/8 a 8×8 con 10 s).
  */
-export const MIN_SIDE: Partial<Record<Difficulty, number>> = { expert: 7, master: 8 };
+const MIN_SIDE: Partial<Record<Difficulty, number>> = { expert: 7, master: 8 };
 
 export function minSide(d: Difficulty): number {
   return MIN_SIDE[d] ?? MIN_SIZE;

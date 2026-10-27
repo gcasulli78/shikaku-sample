@@ -26,6 +26,8 @@ export interface GenerateResult extends Puzzle {
   unique: boolean;
   /** Difficoltà misurata, che può differire da quella chiesta se non è stata trovata. */
   difficulty: Difficulty;
+  /** False se nemmeno le regole di Maestro bastano a risolverlo (serve andare per tentativi). */
+  logical: boolean;
 }
 
 /**
@@ -235,7 +237,11 @@ function tune(
     const moved = placeClue(solution[i]!, rng, profile);
     if (moved.r === previous.r && moved.c === previous.c) continue;
     clues[i] = moved;
-    const next = solve({ rows, cols, clues }, 2).count === 1 ? measure(rows, cols, clues, targetLevel) : undefined;
+    // Il valutatore scarta solo forme impossibili: se chiude il puzzle, la soluzione è unica
+    // e il solver serve solo quando non ci arriva.
+    const measured = measure(rows, cols, clues, targetLevel);
+    const unsolved = measured.level === DIFFICULTIES.length;
+    const next = !unsolved || solve({ rows, cols, clues }, 2).count === 1 ? measured : undefined;
     if (next && cost(next) <= cost(current)) current = next;
     else clues[i] = previous;
   }
@@ -267,20 +273,23 @@ export function generate(options: GenerateOptions): GenerateResult {
     const { level } = unique
       ? tune(rows, cols, clues, solution, targetLevel, rng, profile, tuneMoves, outOfTime)
       : measure(rows, cols, clues, targetLevel);
-    const result: GenerateResult = {
-      rows,
-      cols,
-      clues,
-      solution,
-      seed,
-      unique,
-      difficulty: DIFFICULTIES[Math.min(level, DIFFICULTIES.length - 1)]!.id,
-    };
-    // Un puzzle non unico è sempre l'ultima scelta; a pari distanza meglio un livello sotto
-    // che uno sopra (oltre l'ultimo livello il valutatore non garantisce che si risolva ragionando).
-    const distance = Math.abs(level - targetLevel) + (level > targetLevel ? 0.5 : 0) + (unique ? 0 : 100);
+    const logical = level < DIFFICULTIES.length;
+    const result: GenerateResult = { rows, cols, clues, solution, seed, unique, logical, difficulty: labelFor(level) };
+    // Un puzzle non unico è sempre l'ultima scelta, uno che il valutatore non chiude la penultima.
+    const distance = Math.abs(level - targetLevel) + (logical ? 0 : 50) + (unique ? 0 : 100);
     if (distance === 0) return result;
     if (!best || distance < best.distance) best = { result, distance };
   }
-  return best!.result;
+  const { result } = best!;
+  if (!result.logical && targetLevel < DIFFICULTIES.length - 1) {
+    // La misura era limitata: senza limite il livello vero può essere Maestro.
+    const graded = grade(result);
+    if (graded.solved) return { ...result, logical: true, difficulty: graded.difficulty };
+  }
+  return result;
+}
+
+/** Oltre l'ultimo livello si usa comunque l'etichetta più alta (con logical: false). */
+function labelFor(level: number): Difficulty {
+  return DIFFICULTIES[Math.min(level, DIFFICULTIES.length - 1)]!.id;
 }
