@@ -28,6 +28,19 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 
 La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il DOM ed è coperta dai test in `tests/`.
 
+## Varianti
+
+- **Classico**: ogni indizio è un numero, cioè l'area del suo rettangolo.
+- **Forme**: un indizio può dire anche la forma, e area o forma possono restare aperte.
+
+| Indizio | Significato |
+| --- | --- |
+| `6` | area 6, forma qualsiasi |
+| `□ 4` | quadrato di area 4 (2×2) |
+| `▭ 6` | rettangolo non quadrato di area 6 |
+| `□` / `▭` | forma fissa, area qualsiasi |
+| `?` | forma e area qualsiasi |
+
 ## Difficoltà
 
 Il livello è la regola più avanzata che serve per risolvere il puzzle:

@@ -6,12 +6,35 @@ export interface Rect {
   w: number;
 }
 
-/** Numero sulla griglia: la forma che lo contiene deve avere area n. */
+/** Forma imposta da un indizio: quadrato, oppure rettangolo non quadrato. */
+export type Shape = "square" | "oblong";
+
+/**
+ * Indizio sulla griglia: il rettangolo che lo contiene deve avere area n (se c'è)
+ * e la forma indicata (se c'è). Senza nessuno dei due è un "?": forma e area libere.
+ */
 export interface Clue {
   r: number;
   c: number;
-  n: number;
+  n?: number;
+  shape?: Shape;
 }
+
+export function shapeOf(rect: Rect): Shape {
+  return rect.h === rect.w ? "square" : "oblong";
+}
+
+/** Il rettangolo rispetta area e forma dell'indizio? */
+export function fits(clue: Clue, rect: Rect): boolean {
+  return (clue.n === undefined || clue.n === area(rect)) && (clue.shape === undefined || clue.shape === shapeOf(rect));
+}
+
+export type Variant = "classic" | "shapes";
+
+export const VARIANTS: { id: Variant; label: string }[] = [
+  { id: "classic", label: "Classico" },
+  { id: "shapes", label: "Forme" },
+];
 
 export interface Puzzle {
   rows: number;

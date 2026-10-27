@@ -58,6 +58,38 @@ describe("Game", () => {
     expect(game.status({ r: 0, c: 1, h: 1, w: 1 })).toBe("open"); // nessun numero
   });
 
+  it("Forme: validità, errori certi e tap secondo forma e area dell'indizio", () => {
+    //  □ . ?      □ = quadrato di area qualsiasi, ▭4 = rettangolo non quadrato di 4
+    //  ▭ . .
+    const shapes: Puzzle = {
+      rows: 2,
+      cols: 3,
+      clues: [
+        { r: 0, c: 0, shape: "square" },
+        { r: 0, c: 2 },
+        { r: 1, c: 0, n: 4, shape: "oblong" },
+      ],
+      solution: [],
+    };
+    const game = new Game(shapes);
+    expect(game.isValid({ r: 0, c: 0, h: 1, w: 1 })).toBe(true); // □ 1×1
+    expect(game.isValid({ r: 0, c: 0, h: 1, w: 2 })).toBe(false); // □ ma non quadrato
+    expect(game.status({ r: 0, c: 0, h: 1, w: 2 })).toBe("open"); // può ancora diventare 2×2
+    expect(game.isValid({ r: 1, c: 0, h: 1, w: 3 })).toBe(false); // area 3, non 4
+    expect(game.status({ r: 1, c: 0, h: 1, w: 3 })).toBe("open");
+    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("bad"); // due indizi
+    expect(game.isValid({ r: 0, c: 1, h: 2, w: 2 })).toBe(true); // ? accetta tutto
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // □ ammette 1×1
+    expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("place"); // ? ammette 1×1
+    expect(game.intent({ r: 1, c: 0, h: 1, w: 1 })).toBe("none"); // ▭4 no
+  });
+
+  it("Forme: area giusta ma forma sbagliata è un errore certo", () => {
+    const square4: Puzzle = { rows: 2, cols: 4, clues: [{ r: 0, c: 0, n: 4, shape: "square" }], solution: [] };
+    expect(new Game(square4).status({ r: 0, c: 0, h: 1, w: 4 })).toBe("bad");
+    expect(new Game(square4).status({ r: 0, c: 0, h: 2, w: 2 })).toBe("valid");
+  });
+
   it("dopo aver tolto un rettangolo lo spazio torna libero", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 1, w: 2 });

@@ -26,6 +26,13 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 - Click singolo: su un rettangolo lo toglie; su una casella libera crea un 1×1 solo se lì c'è il numero 1, altrimenti non fa niente.
 - Suggerimento: se ci sono rettangoli sbagliati (diversi dalla soluzione) li toglie tutti senza posarne; solo quando non ce ne sono posa un pezzo corretto.
 
+## Variante Forme
+
+- `Clue` ha `n` e `shape` opzionali (`types.ts`): senza `n` l'area è aperta, senza `shape` la forma è libera, senza nessuno dei due è un `?`. Ogni controllo su un rettangolo passa da `fits(clue, rect)`.
+- Con aree aperte la somma dei numeri non garantisce più la copertura: il solver verifica che tutte le caselle siano coperte prima di contare una soluzione.
+- Il generatore sceglie il tipo di indizio con `SHAPE_KINDS` (pesi per livello); per rendere unica la soluzione prima **rivela** un'informazione, poi sposta l'indizio. Nel Classico la sequenza casuale è identica a prima (stessi puzzle per seed).
+- Il valutatore ha un budget di passi (`WORK_BUDGET`): con molti indizi aperti le ipotesi profonde esplodevano fino a 10 s per valutazione. Finito il budget il puzzle risulta "non risolto", senza scartare forme a torto.
+
 ## Difficoltà
 
 Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) per chiudere il puzzle:

@@ -13,9 +13,12 @@ import {
   rectFromCorners,
   sameRect,
   TIME_LIMITS,
+  VARIANTS,
+  type Clue,
   type Difficulty,
   type Rect,
   type Size,
+  type Variant,
 } from "./types";
 import GeneratorWorker from "./worker?worker&inline";
 
@@ -34,7 +37,25 @@ interface Settings {
   sizeId: string;
   custom: Size;
   difficulty: Difficulty;
+  variant: Variant;
   theme: Theme;
+}
+
+/** Cosa si chiede al generatore per una partita. */
+interface Choice {
+  size: Size;
+  difficulty: Difficulty;
+  variant: Variant;
+}
+
+function variantLabel(v: Variant): string {
+  return VARIANTS.find((x) => x.id === v)!.label;
+}
+
+/** Descrizione dell'indizio per i lettori di schermo. */
+function clueLabel(clue: Clue): string {
+  const shape = clue.shape === "square" ? "quadrato" : clue.shape === "oblong" ? "rettangolo non quadrato" : "forma libera";
+  return `${shape}, ${clue.n !== undefined ? `${clue.n} caselle` : "caselle libere"}`;
 }
 
 /**
@@ -110,7 +131,13 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
-const DEFAULT_SETTINGS: Settings = { sizeId: "8x8", custom: { rows: 6, cols: 8 }, difficulty: "medium", theme: "auto" };
+const DEFAULT_SETTINGS: Settings = {
+  sizeId: "8x8",
+  custom: { rows: 6, cols: 8 },
+  difficulty: "medium",
+  variant: "classic",
+  theme: "auto",
+};
 
 type Ready = Record<string, GenerateResult>;
 
@@ -170,6 +197,8 @@ export function startApp(): void {
   const board = $<HTMLDivElement>("board");
   const sizeSelect = $<HTMLSelectElement>("size");
   const difficultySelect = $<HTMLSelectElement>("difficulty");
+  const variantSelect = $<HTMLSelectElement>("variant");
+  const legend = $<HTMLParagraphElement>("legend");
   const statusEl = $<HTMLParagraphElement>("status");
   const newBtn = $<HTMLButtonElement>("new");
   const customBox = $<HTMLDivElement>("custom");
@@ -192,6 +221,7 @@ export function startApp(): void {
   // Assegnata alla prima generazione; fino ad allora i comandi sono disattivati.
   let game!: Game;
   let difficulty: Difficulty = settings.difficulty;
+  let gameVariant: Variant = settings.variant;
   let hues: number[] = [];
   let solved = false;
   let lastHint: Hint | undefined;
@@ -223,6 +253,8 @@ export function startApp(): void {
   colsInput.value = String(clampSize(settings.custom.cols));
   for (const d of DIFFICULTIES) difficultySelect.add(new Option(d.label, d.id));
   difficultySelect.value = DIFFICULTIES.some((d) => d.id === settings.difficulty) ? settings.difficulty : "medium";
+  for (const v of VARIANTS) variantSelect.add(new Option(v.label, v.id));
+  variantSelect.value = VARIANTS.some((v) => v.id === settings.variant) ? settings.variant : "classic";
 
   const syncCustom = () => {
     customBox.hidden = sizeSelect.value !== CUSTOM;
@@ -249,19 +281,20 @@ export function startApp(): void {
   };
 
   // --- Puzzle pronti in anticipo ---
-  const readyKey = (size: Size, d: Difficulty) => `${size.rows}x${size.cols}:${d}`;
+  const readyKey = ({ size, difficulty, variant }: Choice) => `${size.rows}x${size.cols}:${difficulty}:${variant}`;
 
-  const optionsFor = (size: Size, d: Difficulty, timeFactor = 1): GenerateOptions => ({
+  const optionsFor = ({ size, difficulty, variant }: Choice, timeFactor = 1): GenerateOptions => ({
     ...size,
-    difficulty: d,
+    difficulty,
+    variant,
     maxCandidates: 10_000,
-    timeLimitMs: timeFactor * TIME_LIMITS[d],
+    timeLimitMs: timeFactor * TIME_LIMITS[difficulty],
   });
 
   /** Conserva un puzzle per dopo, solo se è di un livello lento e proprio del livello chiesto. */
-  const store = (size: Size, d: Difficulty, puzzle: GenerateResult) => {
-    if (!PREFETCH.includes(d) || puzzle.difficulty !== d || !puzzle.logical) return;
-    const key = readyKey(size, d);
+  const store = (choice: Choice, puzzle: GenerateResult) => {
+    if (!PREFETCH.includes(choice.difficulty) || puzzle.difficulty !== choice.difficulty || !puzzle.logical) return;
+    const key = readyKey(choice);
     delete ready[key];
     ready[key] = puzzle;
     const keys = Object.keys(ready);
@@ -270,23 +303,28 @@ export function startApp(): void {
   };
 
   /** Prepara in background il prossimo puzzle di un livello lento, se non ce n'è già uno. */
-  const prefetch = (size: Size, d: Difficulty) => {
-    const key = readyKey(size, d);
-    if (!PREFETCH.includes(d) || ready[key] || pending?.key === key) return;
-    const promise = prefetchAsync(optionsFor(size, d, 2));
+  const prefetch = (choice: Choice) => {
+    const key = readyKey(choice);
+    if (!PREFETCH.includes(choice.difficulty) || ready[key] || pending?.key === key) return;
+    const promise = prefetchAsync(optionsFor(choice, 2));
     pending = { key, promise };
     void promise.then((puzzle) => {
       if (pending?.promise === promise) pending = undefined;
-      if (puzzle) store(size, d, puzzle);
+      if (puzzle) store(choice, puzzle);
     });
   };
 
   /** Puzzle pronto (anche in preparazione), altrimenti generato al momento. Non lo toglie dai pronti. */
-  const obtain = async (size: Size, d: Difficulty) => {
-    const key = readyKey(size, d);
+  const obtain = async (choice: Choice) => {
+    const key = readyKey(choice);
     if (!ready[key] && pending?.key === key) await pending.promise;
-    return ready[key] ?? generateAsync(optionsFor(size, d));
+    return ready[key] ?? generateAsync(optionsFor(choice));
   };
+
+  const syncLegend = () => {
+    legend.hidden = variantSelect.value !== "shapes";
+  };
+  syncLegend();
 
   const setStatus = (html: string) => {
     statusEl.innerHTML = html;
@@ -298,23 +336,27 @@ export function startApp(): void {
     const chosen = difficultySelect.value as Difficulty;
     const available = availableDifficulties(size);
     const target = available.includes(chosen) ? chosen : available[available.length - 1]!;
+    const variant = variantSelect.value as Variant;
+    const choice: Choice = { size, difficulty: target, variant };
     settings.sizeId = sizeSelect.value;
     settings.difficulty = chosen;
+    settings.variant = variant;
     if (settings.sizeId === CUSTOM) settings.custom = size;
     writeJson(STORAGE_KEY, settings);
+    syncLegend();
 
     const id = ++request;
     newBtn.disabled = true;
     board.classList.add("busy");
     setStatus(`Generazione di un ${size.rows}×${size.cols} ${difficultyLabel(target).toLowerCase()}…`);
-    const puzzle = await obtain(size, target);
+    const puzzle = await obtain(choice);
     if (!puzzle) return;
     if (id !== request) {
       // Nel frattempo è stata chiesta un'altra partita: un puzzle buono si tiene per dopo.
-      store(size, target, puzzle);
+      store(choice, puzzle);
       return;
     }
-    const key = readyKey(size, target);
+    const key = readyKey(choice);
     if (ready[key] === puzzle) {
       delete ready[key];
       writeJson(READY_KEY, ready);
@@ -324,6 +366,7 @@ export function startApp(): void {
 
     const { rows, cols } = puzzle;
     game = new Game(puzzle);
+    gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.solution);
     solved = false;
@@ -337,9 +380,10 @@ export function startApp(): void {
     if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
     else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
-    setStatus(`<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${note}`);
+    const variantNote = variant === "shapes" ? ` · ${variantLabel(variant)}` : "";
+    setStatus(`<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`);
     render();
-    prefetch(size, target);
+    prefetch(choice);
   };
 
   sizeSelect.addEventListener("change", () => {
@@ -349,6 +393,7 @@ export function startApp(): void {
     else void newGame();
   });
   difficultySelect.addEventListener("change", () => void newGame());
+  variantSelect.addEventListener("change", () => void newGame());
   for (const input of [rowsInput, colsInput]) {
     input.addEventListener("change", () => {
       input.value = String(clampSize(input.valueAsNumber));
@@ -402,11 +447,15 @@ export function startApp(): void {
     }
 
     for (const clue of clues) {
-      const num = document.createElement("div");
-      num.className = "clue";
-      num.style.gridArea = `${clue.r + 1} / ${clue.c + 1}`;
-      num.textContent = String(clue.n);
-      board.append(num);
+      const el = document.createElement("div");
+      el.className = "clue";
+      if (clue.shape) el.classList.add(clue.shape);
+      if (clue.n === undefined) el.classList.add("open");
+      el.style.gridArea = `${clue.r + 1} / ${clue.c + 1}`;
+      // "?" solo quando non c'è né numero né forma.
+      el.textContent = clue.n !== undefined ? String(clue.n) : clue.shape ? "" : "?";
+      el.ariaLabel = clueLabel(clue);
+      board.append(el);
     }
     board.classList.toggle("solved", solved);
 
@@ -429,15 +478,18 @@ export function startApp(): void {
     }
     gridArea(preview, rect);
     preview.classList.toggle("blocked", game.intent(rect) === "blocked");
-    preview.textContent = area(rect) > 1 ? `${rect.h}×${rect.w}=${area(rect)}` : "";
+    // ✓ quando il rettangolo rispetta il suo indizio (utile soprattutto con le forme).
+    const label = area(rect) > 1 ? `${rect.h}×${rect.w}=${area(rect)}` : "";
+    preview.textContent = game.isValid(rect) ? `${label} ✓` : label;
   };
 
   const afterMove = () => {
     if (game.isSolved()) {
       solved = true;
       timer.pause();
+      const variant = gameVariant === "shapes" ? ` · ${variantLabel(gameVariant)}` : "";
       winText.textContent =
-        `${difficultyLabel(difficulty)} · tempo ${formatTime(timer.elapsed())}` +
+        `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(timer.elapsed())}` +
         (game.hintsUsed > 0 ? ` · ${game.hintsUsed} suggeriment${game.hintsUsed === 1 ? "o" : "i"}` : " · senza suggerimenti");
     }
     render();

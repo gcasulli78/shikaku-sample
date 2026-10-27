@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countSolutions, solve } from "../src/solver";
+import { candidatesFor, clueIndexMap, countSolutions, solve } from "../src/solver";
 import type { Clue } from "../src/types";
 
 /** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
@@ -49,5 +49,35 @@ describe("solver", () => {
 
   it("griglia senza vincoli superflui: 1×1 ovunque", () => {
     expect(countSolutions(parse(["11", "11"]))).toBe(1);
+  });
+});
+
+describe("indizi con forma e area aperte", () => {
+  const grid2 = (clue: Clue) => ({ rows: 2, cols: 2, clues: [clue] });
+  const count = (clue: Clue) => candidatesFor(grid2(clue), 0, clueIndexMap(grid2(clue))).length;
+
+  it("candidati: ? tutti, □ solo quadrati, ▭ solo non quadrati", () => {
+    expect(count({ r: 0, c: 0 })).toBe(4); // 1×1, 1×2, 2×1, 2×2
+    expect(count({ r: 0, c: 0, shape: "square" })).toBe(2); // 1×1, 2×2
+    expect(count({ r: 0, c: 0, shape: "oblong" })).toBe(2); // 1×2, 2×1
+    expect(count({ r: 0, c: 0, n: 4, shape: "square" })).toBe(1);
+    expect(count({ r: 0, c: 0, n: 4, shape: "oblong" })).toBe(0);
+  });
+
+  it("la forma rende unica una soluzione che con ? non lo è", () => {
+    //  ? . □      il □ in alto a destra può essere solo il 2×2 a destra
+    //  . . .
+    const square = { rows: 2, cols: 3, clues: [{ r: 0, c: 0 }, { r: 0, c: 2, shape: "square" as const }] };
+    const result = solve(square, 2);
+    expect(result.count).toBe(1);
+    expect(result.solutions[0]).toEqual([
+      { r: 0, c: 0, h: 2, w: 1 },
+      { r: 0, c: 1, h: 2, w: 2 },
+    ]);
+    expect(countSolutions({ ...square, clues: [{ r: 0, c: 0 }, { r: 0, c: 2 }] }, 10)).toBe(2);
+  });
+
+  it("aree note che superano la griglia: nessuna soluzione", () => {
+    expect(countSolutions({ rows: 2, cols: 2, clues: [{ r: 0, c: 0, n: 4 }, { r: 1, c: 1 }] })).toBe(0);
   });
 });

@@ -3,7 +3,7 @@ import { generate, partition } from "../src/generator";
 import { createRng } from "../src/rng";
 import { grade } from "../src/grader";
 import { countSolutions } from "../src/solver";
-import { area, contains, type Difficulty, type Puzzle, type Rect } from "../src/types";
+import { contains, fits, type Difficulty, type Puzzle, type Rect } from "../src/types";
 
 const SIZES: [number, number][] = [
   [4, 4],
@@ -39,7 +39,7 @@ function expectValidPuzzle(p: Puzzle) {
   for (const rect of p.solution) {
     const inside = p.clues.filter((cl) => contains(rect, cl.r, cl.c));
     expect(inside).toHaveLength(1);
-    expect(inside[0]!.n).toBe(area(rect));
+    expect(fits(inside[0]!, rect)).toBe(true);
   }
 }
 
@@ -111,6 +111,37 @@ describe("generate con difficoltà", () => {
       }
     }, 120_000);
   }
+
+  for (const [rows, cols] of [
+    [8, 8],
+    [10, 10],
+  ] as const) {
+    it(`variante Forme ${rows}×${cols}: ogni livello, soluzione unica e indizi aperti`, () => {
+      const open = { shape: 0, area: 0, any: 0 };
+      for (const difficulty of ["easy", "medium", "hard", "expert", "master"] as Difficulty[]) {
+        for (let seed = 1; seed <= 2; seed++) {
+          const p = generate({ rows, cols, difficulty, variant: "shapes", seed, maxCandidates: 1000 });
+          expectValidPuzzle(p);
+          expect(p.difficulty, `${difficulty} seed ${seed}`).toBe(difficulty);
+          expect(countSolutions(p, 2), `${difficulty} seed ${seed}`).toBe(1);
+          for (const cl of p.clues) {
+            if (cl.shape) open.shape++;
+            if (cl.n === undefined) open.area++;
+            if (cl.n === undefined && !cl.shape) open.any++;
+          }
+        }
+      }
+      // Tutti i tipi di indizio compaiono: forma indicata, area aperta, "?".
+      expect(open.shape).toBeGreaterThan(0);
+      expect(open.area).toBeGreaterThan(0);
+      expect(open.any).toBeGreaterThan(0);
+    }, 120_000);
+  }
+
+  it("variante Classico: solo numeri", () => {
+    const p = generate({ rows: 8, cols: 8, difficulty: "hard", seed: 1 });
+    expect(p.clues.every((cl) => cl.n !== undefined && cl.shape === undefined)).toBe(true);
+  });
 
   it("rispetta il limite di tempo", () => {
     const start = Date.now();

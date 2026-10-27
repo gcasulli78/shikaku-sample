@@ -1,12 +1,25 @@
 import { grade } from "./grader";
 import { createRng, pick, randomSeed, type Rng } from "./rng";
 import { solve } from "./solver";
-import { area, difficultyLevel, sameRect, DIFFICULTIES, type Clue, type Difficulty, type Puzzle, type Rect } from "./types";
+import {
+  area,
+  difficultyLevel,
+  sameRect,
+  shapeOf,
+  DIFFICULTIES,
+  type Clue,
+  type Difficulty,
+  type Puzzle,
+  type Rect,
+  type Variant,
+} from "./types";
 
 export interface GenerateOptions {
   rows: number;
   cols: number;
   difficulty?: Difficulty;
+  /** Classico (solo numeri, predefinito) o Forme (indizi con forma e area anche aperte). */
+  variant?: Variant;
   seed?: number;
   /** Puzzle a soluzione unica da valutare prima di accontentarsi del più vicino. */
   maxCandidates?: number;
@@ -154,25 +167,98 @@ function mergeSingles(rects: Rect[], rng: Rng, maxArea: number): Rect[] {
   return result;
 }
 
-function placeClue(rect: Rect, rng: Rng, profile: Profile): Clue {
+/**
+ * Cosa mostra un indizio nella variante Forme: solo il numero, forma e numero,
+ * solo la forma, oppure niente ("?"). Nel Classico c'è solo il numero.
+ */
+const KINDS = ["number", "shapeNumber", "shape", "any"] as const;
+type Kind = (typeof KINDS)[number];
+
+/**
+ * Pesi dei tipi di indizio per livello (stesso ordine di KINDS): più si sale, più indizi
+ * aperti. Facile senza indizi aperti (sul 15×15 altrimenti non si trova in tempo);
+ * Maestro ne ha meno di Esperto perché la difficoltà viene dalle ipotesi profonde, che
+ * con troppi indizi aperti esauriscono il budget del valutatore (misurato).
+ */
+export const SHAPE_KINDS: Record<Difficulty, readonly number[]> = {
+  easy: [0.3, 0.7, 0, 0],
+  medium: [0.3, 0.4, 0.25, 0.05],
+  hard: [0.25, 0.3, 0.35, 0.1],
+  expert: [0.25, 0.25, 0.35, 0.15],
+  master: [0.35, 0.4, 0.2, 0.05],
+};
+const CLASSIC_KINDS: readonly number[] = [1, 0, 0, 0];
+
+function kindOf(clue: Clue): Kind {
+  if (clue.n === undefined) return clue.shape ? "shape" : "any";
+  return clue.shape ? "shapeNumber" : "number";
+}
+
+/** L'indizio del rettangolo nella cella data, con le informazioni del tipo scelto. */
+function dress(cell: { r: number; c: number }, rect: Rect, kind: Kind): Clue {
+  const clue: Clue = { r: cell.r, c: cell.c };
+  if (kind === "number" || kind === "shapeNumber") clue.n = area(rect);
+  if (kind === "shape" || kind === "shapeNumber") clue.shape = shapeOf(rect);
+  return clue;
+}
+
+/** Cella del rettangolo per l'indizio, preferendo l'interno o i bordi secondo il profilo. */
+function pickCell(rect: Rect, rng: Rng, profile: Profile): { r: number; c: number } {
   const cells: { r: number; c: number }[] = [];
   for (let r = rect.r; r < rect.r + rect.h; r++) for (let c = rect.c; c < rect.c + rect.w; c++) cells.push({ r, c });
   const depth = ({ r, c }: { r: number; c: number }) =>
     Math.min(r - rect.r, rect.r + rect.h - 1 - r) + Math.min(c - rect.c, rect.c + rect.w - 1 - c);
-  const cell = pickWeighted(rng, cells, (cell) => Math.pow(1 + depth(cell), profile.interior));
-  return { ...cell, n: area(rect) };
+  return pickWeighted(rng, cells, (cell) => Math.pow(1 + depth(cell), profile.interior));
+}
+
+/** Come si costruisce un puzzle: dimensioni, casualità, profilo del livello e tipi di indizio. */
+interface Setup {
+  rows: number;
+  cols: number;
+  rng: Rng;
+  profile: Profile;
+  kinds: readonly number[];
+}
+
+function placeClue(rect: Rect, s: Setup): Clue {
+  const cell = pickCell(rect, s.rng, s.profile);
+  // Nel Classico niente estrazione del tipo: stessa sequenza casuale (e stessi puzzle per seed) di prima.
+  return dress(cell, rect, s.kinds === CLASSIC_KINDS ? "number" : pickKind(s));
+}
+
+function pickKind(s: Setup): Kind {
+  return pickWeighted(s.rng, KINDS, (k) => s.kinds[KINDS.indexOf(k)]!);
+}
+
+/** Stesso tipo di indizio in un'altra cella del rettangolo (se ce n'è una). */
+function relocate(clue: Clue, rect: Rect, s: Setup): Clue {
+  let cell = pickCell(rect, s.rng, s.profile);
+  for (let k = 0; k < 4 && cell.r === clue.r && cell.c === clue.c; k++) cell = pickCell(rect, s.rng, s.profile);
+  return dress(cell, rect, kindOf(clue));
 }
 
 /**
- * Puzzle con soluzione unica: partizione casuale, un numero per rettangolo,
- * poi finché il solver trova un'alternativa si spostano i numeri dei rettangoli
- * che l'alternativa non rispetta; se non basta si riparte con una nuova partizione.
+ * Lo stesso indizio con un'informazione in più (prima il numero, poi la forma, solo
+ * nella variante Forme); undefined se è già completo.
  */
-function generateUnique(rows: number, cols: number, rng: Rng, profile: Profile, maxAttempts: number, maxFixes: number) {
+function reveal(clue: Clue, rect: Rect, s: Setup): Clue | undefined {
+  if (clue.n === undefined) return { ...clue, n: area(rect) };
+  if (s.kinds !== CLASSIC_KINDS && clue.shape === undefined && clue.n > 1) return { ...clue, shape: shapeOf(rect) };
+  return undefined;
+}
+
+/**
+ * Puzzle con soluzione unica: partizione casuale, un indizio per rettangolo, poi
+ * finché il solver trova un'alternativa si correggono gli indizi dei rettangoli che
+ * l'alternativa non rispetta (rivelando un'informazione, o spostandoli se sono già
+ * completi); se non basta si riparte con una nuova partizione.
+ */
+function generateUnique(s: Setup, maxAttempts: number, maxFixes: number) {
+  const { rows, cols } = s;
   let fallback: { clues: Clue[]; solution: Rect[]; unique: boolean } | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const solution = partition(rows, cols, rng, profile);
-    const clues = solution.map((rect) => placeClue(rect, rng, profile));
+    const solution = partition(rows, cols, s.rng, s.profile);
+    const clues = solution.map((rect) => placeClue(rect, s));
 
     for (let fix = 0; fix <= maxFixes; fix++) {
       const { count, solutions } = solve({ rows, cols, clues }, 2);
@@ -181,16 +267,10 @@ function generateUnique(rows: number, cols: number, rng: Rng, profile: Profile, 
 
       const alternative = solutions.find((sol) => !sol.every((rect, i) => sameRect(rect, solution[i]!)));
       if (!alternative) break;
-      // Sposta il numero di ogni rettangolo che l'alternativa ha scelto diversamente.
       for (let i = 0; i < solution.length; i++) {
         const rect = solution[i]!;
-        if (sameRect(rect, alternative[i]!) || area(rect) === 1) continue;
-        let clue = placeClue(rect, rng, profile);
-        // Evita di lasciare il numero dove già stava.
-        for (let k = 0; k < 4 && clue.r === clues[i]!.r && clue.c === clues[i]!.c; k++) {
-          clue = placeClue(rect, rng, profile);
-        }
-        clues[i] = clue;
+        if (sameRect(rect, alternative[i]!)) continue;
+        clues[i] = reveal(clues[i]!, rect, s) ?? (area(rect) > 1 ? relocate(clues[i]!, rect, s) : clues[i]!);
       }
     }
   }
@@ -209,23 +289,17 @@ function measure(rows: number, cols: number, clues: Clue[], targetLevel: number)
 }
 
 /**
- * Raffinamento locale: sposta un numero alla volta dentro la sua forma e tiene lo
- * spostamento se la soluzione resta unica e la difficoltà si avvicina all'obiettivo
- * (a parità di livello, più passaggi al livello più alto se si sale, meno se si scende).
+ * Raffinamento locale: cambia un indizio alla volta (lo sposta dentro la sua forma
+ * oppure, nella variante Forme, cambia cosa mostra) e tiene la modifica se la soluzione
+ * resta unica e la difficoltà si avvicina all'obiettivo (a parità di livello, più
+ * passaggi al livello più alto se si sale, meno se si scende).
  */
-function tune(
-  rows: number,
-  cols: number,
-  clues: Clue[],
-  solution: Rect[],
-  targetLevel: number,
-  rng: Rng,
-  profile: Profile,
-  moves: number,
-  outOfTime: () => boolean,
-) {
+function tune(s: Setup, clues: Clue[], solution: Rect[], targetLevel: number, moves: number, outOfTime: () => boolean) {
+  const { rows, cols, rng } = s;
+  const shapes = s.kinds !== CLASSIC_KINDS;
   let current = measure(rows, cols, clues, targetLevel);
-  const movable = solution.map((_, i) => i).filter((i) => area(solution[i]!) > 1);
+  // Un indizio in un 1×1 non si può spostare, ma nelle Forme può cambiare tipo.
+  const movable = solution.map((_, i) => i).filter((i) => shapes || area(solution[i]!) > 1);
   if (movable.length === 0) return current;
   // Più basso = meglio.
   const cost = ({ level, steps }: { level: number; steps: number }) =>
@@ -234,8 +308,10 @@ function tune(
   for (let m = 0; m < moves && current.level !== targetLevel && !outOfTime(); m++) {
     const i = pick(rng, movable);
     const previous = clues[i]!;
-    const moved = placeClue(solution[i]!, rng, profile);
-    if (moved.r === previous.r && moved.c === previous.c) continue;
+    const rect = solution[i]!;
+    const changeKind = shapes && (area(rect) === 1 || rng() < 0.5);
+    const moved = dress(changeKind ? previous : pickCell(rect, rng, s.profile), rect, changeKind ? pickKind(s) : kindOf(previous));
+    if (moved.r === previous.r && moved.c === previous.c && kindOf(moved) === kindOf(previous)) continue;
     clues[i] = moved;
     // Il valutatore scarta solo forme impossibili: se chiude il puzzle, la soluzione è unica
     // e il solver serve solo quando non ci arriva.
@@ -262,16 +338,22 @@ export function generate(options: GenerateOptions): GenerateResult {
   const maxFixes = options.maxFixes ?? 20;
   const rng = createRng(seed);
   const targetLevel = difficultyLevel(target);
-  const profile = PROFILES[target];
+  const s: Setup = {
+    rows,
+    cols,
+    rng,
+    profile: PROFILES[target],
+    kinds: options.variant === "shapes" ? SHAPE_KINDS[target] : CLASSIC_KINDS,
+  };
   const deadline = options.timeLimitMs === undefined ? Infinity : Date.now() + options.timeLimitMs;
   const outOfTime = () => Date.now() > deadline;
 
   let best: { result: GenerateResult; distance: number } | undefined;
   // Almeno un candidato anche a tempo scaduto.
   for (let k = 0; k < maxCandidates && (k === 0 || !outOfTime()); k++) {
-    const { clues, solution, unique } = generateUnique(rows, cols, rng, profile, maxAttempts, maxFixes);
+    const { clues, solution, unique } = generateUnique(s, maxAttempts, maxFixes);
     const { level } = unique
-      ? tune(rows, cols, clues, solution, targetLevel, rng, profile, tuneMoves, outOfTime)
+      ? tune(s, clues, solution, targetLevel, tuneMoves, outOfTime)
       : measure(rows, cols, clues, targetLevel);
     const logical = level < DIFFICULTIES.length;
     const result: GenerateResult = { rows, cols, clues, solution, seed, unique, logical, difficulty: labelFor(level) };

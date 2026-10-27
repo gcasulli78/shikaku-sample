@@ -1,4 +1,4 @@
-import type { Clue, Rect } from "./types";
+import { fits, type Clue, type Rect } from "./types";
 
 export interface SolveInput {
   rows: number;
@@ -26,15 +26,23 @@ export function clueIndexMap(input: SolveInput): Int32Array {
   return clueAt;
 }
 
-/** Tutti i rettangoli di area n che contengono l'indizio e nessun altro indizio. */
+/** Misure (h, w) ammesse dall'indizio: con l'area nota solo i divisori, altrimenti tutte. */
+function sizesFor(clue: Clue, rows: number, cols: number): [number, number][] {
+  const sizes: [number, number][] = [];
+  for (let h = 1; h <= rows; h++) {
+    for (let w = 1; w <= cols; w++) {
+      if (fits(clue, { r: 0, c: 0, h, w })) sizes.push([h, w]);
+    }
+  }
+  return sizes;
+}
+
+/** Tutti i rettangoli che rispettano l'indizio, lo contengono e non contengono altri indizi. */
 export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int32Array): Candidate[] {
   const { rows, cols, clues } = input;
   const clue = clues[clueIndex]!;
   const result: Candidate[] = [];
-  for (let h = 1; h <= clue.n; h++) {
-    if (clue.n % h !== 0) continue;
-    const w = clue.n / h;
-    if (h > rows || w > cols) continue;
+  for (const [h, w] of sizesFor(clue, rows, cols)) {
     for (let r = Math.max(0, clue.r - h + 1); r <= Math.min(clue.r, rows - h); r++) {
       for (let c = Math.max(0, clue.c - w + 1); c <= Math.min(clue.c, cols - w); c++) {
         const cells: number[] = [];
@@ -68,14 +76,16 @@ export function solve(input: SolveInput, limit = 2): SolveResult {
   const total = rows * cols;
   const result: SolveResult = { count: 0, solutions: [] };
 
-  const sum = clues.reduce((s, cl) => s + cl.n, 0);
-  if (sum !== total) return result;
+  // Con tutte le aree note la somma deve tornare esatta; con aree aperte non può superare la griglia.
+  const known = clues.filter((cl) => cl.n !== undefined);
+  const sum = known.reduce((s, cl) => s + cl.n!, 0);
+  if (known.length === clues.length ? sum !== total : sum > total) return result;
 
   const clueAt = new Int32Array(total).fill(-1);
   for (let i = 0; i < clues.length; i++) {
     const cl = clues[i]!;
     const idx = cl.r * cols + cl.c;
-    if (cl.n < 1 || clueAt[idx] !== -1) return result;
+    if ((cl.n !== undefined && cl.n < 1) || clueAt[idx] !== -1) return result;
     clueAt[idx] = i;
   }
 
@@ -85,6 +95,7 @@ export function solve(input: SolveInput, limit = 2): SolveResult {
   const chosen: (Rect | undefined)[] = new Array(clues.length);
   const coverCount = new Int32Array(total);
   let remaining = clues.length;
+  let covered = 0;
 
   const isFree = (cand: Candidate) => cand.cells.every((idx) => occupied[idx] === 0);
 
@@ -93,16 +104,20 @@ export function solve(input: SolveInput, limit = 2): SolveResult {
     placed[clueIndex] = 1;
     chosen[clueIndex] = cand.rect;
     remaining--;
+    covered += cand.cells.length;
   };
   const unplace = (clueIndex: number, cand: Candidate) => {
     for (const idx of cand.cells) occupied[idx] = 0;
     placed[clueIndex] = 0;
     chosen[clueIndex] = undefined;
     remaining++;
+    covered -= cand.cells.length;
   };
 
   const search = (): boolean => {
     if (remaining === 0) {
+      // Con aree aperte tutti gli indizi possono essere posati lasciando caselle scoperte.
+      if (covered < total) return false;
       result.count++;
       result.solutions.push(chosen.map((r) => ({ ...r! })));
       return result.count >= limit;

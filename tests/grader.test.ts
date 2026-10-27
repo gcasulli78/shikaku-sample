@@ -41,6 +41,17 @@ describe("grade", () => {
     }
   });
 
+  it("non posa mai forme diverse dalla soluzione (variante Forme)", () => {
+    for (const difficulty of ["easy", "hard", "expert"] as Difficulty[]) {
+      for (let seed = 1; seed <= 5; seed++) {
+        const p = generate({ rows: 8, cols: 8, difficulty, variant: "shapes", seed });
+        const g = grade(p);
+        expect(g.solved, `${difficulty} seed ${seed}`).toBe(true);
+        g.placed.forEach((rect, i) => expect(sameRect(rect!, p.solution[i]!)).toBe(true));
+      }
+    }
+  });
+
   it("Maestro: corretto, e con le sole regole fino a Esperto non si chiude", () => {
     for (let seed = 1; seed <= 2; seed++) {
       const p = generate({ rows: 8, cols: 8, difficulty: "master", seed, maxCandidates: 1000 });

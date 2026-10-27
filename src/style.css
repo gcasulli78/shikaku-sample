@@ -12,6 +12,8 @@
   --rect-l: 84%;
   --rect-edge-l: 45%;
   --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 6%);
+  /* Segue --text, quindi vale per entrambi i temi. */
+  --clue-shape: color-mix(in srgb, var(--text) 55%, transparent);
   color-scheme: light;
 }
 
@@ -248,6 +250,81 @@ input,
   font-size: calc(100cqw / var(--cols) * 0.48);
   z-index: 2;
   pointer-events: none;
+}
+
+/* Forme: il contorno dietro il numero dice quadrato o rettangolo non quadrato. */
+.clue.square,
+.clue.oblong,
+.sample.square,
+.sample.oblong {
+  position: relative;
+}
+
+.clue.square::before,
+.clue.oblong::before,
+.sample.square::before,
+.sample.oblong::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  border: 1.5px solid var(--clue-shape);
+  border-radius: 2px;
+  z-index: -1;
+}
+
+.clue.square::before,
+.clue.oblong::before {
+  border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
+}
+
+.clue.square::before {
+  width: 70%;
+  height: 70%;
+}
+
+.clue.oblong::before {
+  width: 86%;
+  height: 52%;
+}
+
+/* Senza numero il contorno si riempie appena, per vedersi bene anche da solo. */
+.clue.open::before {
+  background: color-mix(in srgb, var(--clue-shape) 22%, transparent);
+}
+
+.clue.oblong {
+  font-size: calc(100cqw / var(--cols) * 0.4);
+}
+
+.sample {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.4em;
+  font-weight: 700;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.sample.square::before {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.sample.oblong::before {
+  width: 1.9em;
+  height: 1.05em;
+}
+
+.sample.square,
+.sample.oblong {
+  isolation: isolate;
+  min-width: 2em;
+}
+
+.legend[hidden] {
+  display: none;
 }
 
 .cell.last-col {

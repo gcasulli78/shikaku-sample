@@ -22,6 +22,8 @@ export interface GradeResult {
   solved: boolean;
   /** Rettangoli posati, per indice di numero (undefined se non risolto). */
   placed: (Rect | undefined)[];
+  /** Passi di deduzione usati (vedi WORK_BUDGET). */
+  work: number;
 }
 
 interface State {
@@ -162,9 +164,23 @@ function ruleNoHole(s: State, total: number): Outcome {
 const GUESS = { options: 3, level: 1 };
 const DEEP_GUESS = { options: 6, level: 3 };
 
+/**
+ * Passi di deduzione concessi a una valutazione, ipotesi comprese. Con molti indizi
+ * aperti le ipotesi profonde esplodono (fino a secondi per puzzle): finito il budget ci
+ * si ferma come se non ci fossero altre deduzioni, quindi nessuna forma viene scartata
+ * a torto e il puzzle risulta solo "non risolto". Misurato su 15×15: nel Classico
+ * una valutazione non supera ~3000 passi, nelle Forme arrivava a 60000 (10 s).
+ */
+export const WORK_BUDGET = 8000;
+
+interface Work {
+  done: number;
+}
+
 /** Applica le regole fino al livello maxLevel finché c'è progresso. */
-function propagate(s: State, total: number, maxLevel: number, steps: number[]): "solved" | "stuck" | "contradiction" {
+function propagate(s: State, total: number, maxLevel: number, steps: number[], work: Work): "solved" | "stuck" | "contradiction" {
   for (;;) {
+    if (++work.done > WORK_BUDGET) return "stuck";
     if (isContradiction(s, total)) return "contradiction";
     if (s.placed.every((r) => r !== undefined)) return "solved";
 
@@ -175,8 +191,8 @@ function propagate(s: State, total: number, maxLevel: number, steps: number[]): 
       [1, () => ruleCellOwner(s, total)],
       [1, () => ruleSureCells(s)],
       [2, () => ruleNoHole(s, total)],
-      [3, () => ruleGuess(s, total, GUESS)],
-      [4, () => ruleGuess(s, total, DEEP_GUESS)],
+      [3, () => ruleGuess(s, total, GUESS, work)],
+      [4, () => ruleGuess(s, total, DEEP_GUESS, work)],
     ];
     for (const [ruleLevel, rule] of rules) {
       if (ruleLevel > maxLevel) break;
@@ -195,7 +211,7 @@ function propagate(s: State, total: number, maxLevel: number, steps: number[]): 
  * contraddizione seguendo le regole fino a guess.level (il controllo di contraddizione
  * ad ogni passo copre già i buchi più evidenti).
  */
-function ruleGuess(s: State, total: number, guess: { options: number; level: number }): Outcome {
+function ruleGuess(s: State, total: number, guess: { options: number; level: number }, work: Work): Outcome {
   const order = s.cands
     .map((list, i) => ({ i, n: list.length }))
     .filter(({ i, n }) => !s.placed[i] && n >= 2 && n <= guess.options)
@@ -204,7 +220,7 @@ function ruleGuess(s: State, total: number, guess: { options: number; level: num
     const kept = s.cands[i]!.filter((cand) => {
       const trial = cloneState(s);
       place(trial, i, cand);
-      return propagate(trial, total, guess.level, DIFFICULTIES.map(() => 0)) !== "contradiction";
+      return propagate(trial, total, guess.level, DIFFICULTIES.map(() => 0), work) !== "contradiction";
     });
     if (kept.length < s.cands[i]!.length) {
       s.cands[i] = kept;
@@ -224,12 +240,14 @@ export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): Gr
     occupied: new Uint8Array(total),
   };
   const steps = DIFFICULTIES.map(() => 0);
-  const result = propagate(state, total, maxLevel, steps);
+  const work: Work = { done: 0 };
+  const result = propagate(state, total, maxLevel, steps, work);
   const highest = steps.reduce((max, n, level) => (n > 0 ? level : max), 0);
   return {
     difficulty: DIFFICULTIES[highest]!.id,
     steps,
     solved: result === "solved",
     placed: state.placed,
+    work: work.done,
   };
 }

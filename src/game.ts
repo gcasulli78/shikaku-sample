@@ -1,4 +1,4 @@
-import { area, contains, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
+import { area, contains, fits, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
 
 /** Un'azione annullabile: rettangoli tolti e aggiunti insieme. */
 interface Action {
@@ -31,27 +31,32 @@ export class Game {
     return this.puzzle.clues.filter((cl) => contains(rect, cl.r, cl.c));
   }
 
-  /** Valido se contiene un solo numero e l'area coincide. */
+  /** Valido se contiene un solo indizio e ne rispetta area e forma. */
   isValid(rect: Rect): boolean {
     const inside = this.cluesIn(rect);
-    return inside.length === 1 && inside[0]!.n === area(rect);
+    return inside.length === 1 && fits(inside[0]!, rect);
   }
 
-  /** "bad" se è sicuramente sbagliato (più numeri, o più grande del suo numero); "open" se è ancora incerto. */
+  /**
+   * "bad" se è sicuramente sbagliato: più indizi, o area già raggiunta o superata senza
+   * rispettare l'indizio (allargandolo non si sistema). "open" se è ancora incerto.
+   */
   status(rect: Rect): "valid" | "bad" | "open" {
     if (this.isValid(rect)) return "valid";
     const inside = this.cluesIn(rect);
-    return inside.length > 1 || (inside.length === 1 && inside[0]!.n < area(rect)) ? "bad" : "open";
+    const n = inside[0]?.n;
+    return inside.length > 1 || (inside.length === 1 && n !== undefined && n <= area(rect)) ? "bad" : "open";
   }
 
   /**
    * Cosa fa un trascinamento che disegna rect: un tap (1×1) toglie il rettangolo sotto
-   * o chiude un "1", altrimenti non fa niente; un rettangolo più grande si posa se è libero.
+   * o chiude un indizio che ammette una sola casella, altrimenti non fa niente;
+   * un rettangolo più grande si posa se è libero.
    */
   intent(rect: Rect): "remove" | "place" | "blocked" | "none" {
     if (area(rect) === 1) {
       if (this.rectAt(rect.r, rect.c)) return "remove";
-      return this.cluesIn(rect).some((clue) => clue.n === 1) ? "place" : "none";
+      return this.isValid(rect) ? "place" : "none";
     }
     return this.canPlace(rect) ? "place" : "blocked";
   }

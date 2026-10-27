@@ -35,6 +35,10 @@
           <span>Difficoltà</span>
           <select id="difficulty"></select>
         </label>
+        <label class="field">
+          <span>Variante</span>
+          <select id="variant"></select>
+        </label>
         <button type="button" class="btn primary" id="new">Nuova partita</button>
       </section>
 
@@ -50,8 +54,15 @@
         <button type="button" class="btn" id="hint" disabled>Suggerimento</button>
       </section>
 
+      <p class="help legend" id="legend" hidden>
+        <span class="sample square">4</span> quadrato di 4 caselle ·
+        <span class="sample oblong">6</span> rettangolo non quadrato di 6 ·
+        <span class="sample square"></span> <span class="sample oblong"></span> forma fissa, caselle libere ·
+        <span class="sample">?</span> forma e caselle libere
+      </p>
+
       <p class="help">
-        Trascina per disegnare un rettangolo: deve contenere un solo numero ed avere tante caselle quanto quel numero.
+        Trascina per disegnare un rettangolo: deve contenere un solo indizio ed avere tante caselle quanto il suo numero.
         I rettangoli non possono sovrapporsi: tocca un rettangolo per toglierlo, tocca un 1 per chiuderlo.
         Il suggerimento toglie prima i rettangoli sbagliati, poi ne aggiunge uno giusto.
       </p>
