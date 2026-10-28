@@ -70,22 +70,24 @@ const LINK_BUDGET = 200_000;
  * Il puzzle completo da giocare: soluzione dal solver, livello dal valutatore.
  * undefined se non ha una soluzione unica (link modificato a mano).
  */
-export function puzzleFromCode(code: string): { puzzle: GenerateResult; variant: Variant } | undefined {
-  const shared = decodePuzzle(code);
-  if (!shared) return undefined;
-  const { variant, ...input } = shared;
+export function completePuzzle(input: SolveInput): GenerateResult | undefined {
   const result = solve(input, 2, LINK_BUDGET);
   if (result.aborted || result.count !== 1) return undefined;
   const graded = grade(input);
   return {
-    variant,
-    puzzle: {
-      ...input,
-      solution: result.solutions[0]!,
-      seed: 0,
-      unique: true,
-      logical: graded.solved,
-      difficulty: graded.solved ? graded.difficulty : DIFFICULTIES[DIFFICULTIES.length - 1]!.id,
-    },
+    ...input,
+    solution: result.solutions[0]!,
+    seed: 0,
+    unique: true,
+    logical: graded.solved,
+    difficulty: graded.solved ? graded.difficulty : DIFFICULTIES[DIFFICULTIES.length - 1]!.id,
   };
+}
+
+export function puzzleFromCode(code: string): { puzzle: GenerateResult; variant: Variant } | undefined {
+  const shared = decodePuzzle(code);
+  if (!shared) return undefined;
+  const { variant, ...input } = shared;
+  const puzzle = completePuzzle(input);
+  return puzzle && { puzzle, variant };
 }

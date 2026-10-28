@@ -23,12 +23,17 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 | `src/solver.ts` | Conta le soluzioni con backtracking (si ferma a 2) |
 | `src/grader.ts` | Misura la difficoltà risolvendo "come una persona" con regole graduate; trova la prossima deduzione per i suggerimenti |
 | `src/share.ts` | Puzzle nel link: codifica degli indizi, soluzione e livello ricostruiti all'apertura |
+| `src/tutorial.ts` | Le griglie del tutorial, scritte a mano |
 | `src/records.ts` | Record personali per griglia, livello e variante |
 | `src/worker.ts` | Genera i puzzle in un Web Worker, senza bloccare la pagina |
 | `src/game.ts` | Stato partita: posa/rimozione, annulla, suggerimenti (con il motivo), vittoria, cronometro |
 | `src/ui.ts` | Rendering, input mouse/touch, tema, impostazioni salvate |
 
 La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il DOM ed è coperta dai test in `tests/`.
+
+## Come si gioca
+
+Il pulsante **?** apre un tutorial di cinque griglie piccole, una per regola: le regole del gioco, la casella che può raggiungere un solo numero, niente buchi, le ipotesi, la variante Forme. Si giocano sulla griglia vera, con il suggerimento come aiuto; uscendo si riprende la partita di prima.
 
 ## Aiuti
 

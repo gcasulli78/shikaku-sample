@@ -57,6 +57,11 @@ Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) 
 - In `src/types.ts`: `MIN_SIDE` (Esperto da 7, Maestro da 8, sul lato minore) e `TIME_LIMITS`. Allo scadere del tempo si propone il puzzle più vicino, preferendo un livello sotto a uno sopra.
 - Esperto e Maestro: mentre si gioca, un secondo Worker prepara il puzzle successivo e lo salva in `localStorage` (`shikaku:ready`).
 
+## Tutorial
+
+- `tutorial.ts`: griglie scritte a mano, una per regola; i test (`tests/tutorial.test.ts`) verificano soluzione unica, livello del valutatore e prima regola usata. Se si cambiano le regole del valutatore, ricontrollare che ogni griglia insegni ancora la sua.
+- Il tutorial gioca sulla griglia vera: durante il tutorial niente salvataggio, record né riquadro di vittoria; uscendo si riprende la partita salvata (o se ne crea una nuova). Nuova partita o un link chiudono il tutorial.
+
 ## Partite salvate, record, link
 
 - `localStorage`: `shikaku:settings` (menu e tema), `shikaku:game` (partita in corso: puzzle, rettangoli, suggerimenti, tempo; si cancella alla vittoria; la cronologia di Annulla non si salva), `shikaku:records` (`records.ts`, chiave griglia:livello:variante, livello misurato).

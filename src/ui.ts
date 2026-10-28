@@ -1,7 +1,8 @@
 import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame, type WrongReason } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
-import { encodePuzzle, puzzleFromCode } from "./share";
+import { completePuzzle, encodePuzzle, puzzleFromCode } from "./share";
+import { TUTORIAL } from "./tutorial";
 import {
   area,
   availableDifficulties,
@@ -338,6 +339,15 @@ export function startApp(): void {
   const recordsDialog = $<HTMLDialogElement>("records");
   const recordsBody = $<HTMLDivElement>("records-body");
   const srEl = $<HTMLParagraphElement>("sr");
+  const tutorialBtn = $<HTMLButtonElement>("tutorial-btn");
+  const tutorialPanel = $<HTMLElement>("tutorial");
+  const tutorialStepEl = $<HTMLParagraphElement>("tutorial-step");
+  const tutorialTitle = $<HTMLHeadingElement>("tutorial-title");
+  const tutorialText = $<HTMLParagraphElement>("tutorial-text");
+  const tutorialDone = $<HTMLParagraphElement>("tutorial-done");
+  const tutorialPrev = $<HTMLButtonElement>("tutorial-prev");
+  const tutorialNext = $<HTMLButtonElement>("tutorial-next");
+  const tutorialExit = $<HTMLButtonElement>("tutorial-exit");
 
   const timer = new Timer();
   const generateAsync = createGenerator();
@@ -357,6 +367,8 @@ export function startApp(): void {
   /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
   let notice: string | undefined;
   const records = readJson<Records>(RECORDS_KEY, {});
+  /** Il passo del tutorial in corso: la partita vera resta salvata e si riprende all'uscita. */
+  let tutorialStep: number | undefined;
   let request = 0;
 
   // --- Tema ---
@@ -463,6 +475,7 @@ export function startApp(): void {
   };
 
   const newGame = async () => {
+    leaveTutorial();
     const size = chosenSize();
     syncDifficulties();
     const chosen = difficultySelect.value as Difficulty;
@@ -515,6 +528,7 @@ export function startApp(): void {
     lastHint = undefined;
     notice = undefined;
     timer.reset(saved?.elapsed ?? 0);
+    legend.hidden = variant !== "shapes";
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
@@ -526,6 +540,7 @@ export function startApp(): void {
 
   /** Salva la partita in corso; una partita vinta non si riprende. */
   const save = () => {
+    if (tutorialStep !== undefined) return;
     if (solved) return removeKey(GAME_KEY);
     const state: SavedState = {
       puzzle: game.puzzle as GenerateResult,
@@ -657,6 +672,14 @@ export function startApp(): void {
   };
 
   const afterMove = () => {
+    if (game.isSolved() && tutorialStep !== undefined) {
+      solved = true;
+      timer.pause();
+      const last = tutorialStep === TUTORIAL.length - 1;
+      tutorialDone.textContent = last ? "Risolto! Hai visto tutte le regole: buon divertimento." : "Risolto! Passa al prossimo.";
+      tutorialDone.hidden = false;
+      return render();
+    }
     if (game.isSolved()) {
       solved = true;
       timer.pause();
@@ -930,6 +953,56 @@ export function startApp(): void {
     if (game) save();
   });
 
+  // --- Tutorial: griglie scritte a mano, giocate sulla griglia vera ---
+  const showTutorial = (index: number) => {
+    const step = TUTORIAL[index]!;
+    tutorialStep = index;
+    startGame(completePuzzle({ rows: step.rows, cols: step.cols, clues: step.clues })!, step.variant, "");
+    gameStatus = `Come si gioca · ${index + 1} di ${TUTORIAL.length}`;
+    tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
+    tutorialTitle.textContent = step.title;
+    tutorialText.textContent = step.text;
+    tutorialDone.hidden = true;
+    tutorialPrev.disabled = index === 0;
+    tutorialNext.textContent = index === TUTORIAL.length - 1 ? "Gioca" : "Avanti";
+    tutorialPanel.hidden = false;
+    render();
+  };
+
+  /** Chiude il pannello del tutorial (senza toccare la partita in gioco). */
+  function leaveTutorial() {
+    tutorialStep = undefined;
+    tutorialPanel.hidden = true;
+  }
+
+  /** Esce dal tutorial e torna alla partita salvata, o a una nuova. */
+  const exitTutorial = () => {
+    leaveTutorial();
+    if (!resume()) void newGame();
+  };
+
+  tutorialBtn.addEventListener("click", () => {
+    // La partita vera si salva col tempo trascorso fin qui, per riprenderla all'uscita.
+    if (game && tutorialStep === undefined) save();
+    showTutorial(0);
+  });
+  tutorialPrev.addEventListener("click", () => showTutorial(tutorialStep! - 1));
+  tutorialNext.addEventListener("click", () => {
+    if (tutorialStep! < TUTORIAL.length - 1) showTutorial(tutorialStep! + 1);
+    else exitTutorial();
+  });
+  tutorialExit.addEventListener("click", exitTutorial);
+
+  /** Riprende la partita salvata; false se non ce n'è una. */
+  function resume(): boolean {
+    const saved = readJson<SavedState>(GAME_KEY, {});
+    if (!saved.puzzle || !saved.variant || !saved.game) return false;
+    // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
+    syncDifficulties();
+    startGame(saved.puzzle, saved.variant, "", saved);
+    return true;
+  }
+
   // --- Avvio: un puzzle dal link, altrimenti la partita salvata, altrimenti una nuova ---
   /** Allinea i menu al puzzle di un link, così "Nuova partita" ne propone uno simile. */
   const syncControls = (puzzle: GenerateResult, variant: Variant) => {
@@ -957,6 +1030,7 @@ export function startApp(): void {
       // Alcuni browser con file://: l'indirizzo resta col link.
     }
     if (linked) {
+      leaveTutorial();
       syncControls(linked.puzzle, linked.variant);
       startGame(linked.puzzle, linked.variant, " · da un link");
       return true;
@@ -970,7 +1044,6 @@ export function startApp(): void {
   // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
   addEventListener("hashchange", openLink);
 
-  const saved = readJson<SavedState>(GAME_KEY, {});
   const hadLink = location.hash.startsWith(LINK_PREFIX);
   const linkOpened = openLink();
   const warnBadLink = () => {
@@ -980,10 +1053,7 @@ export function startApp(): void {
   };
   if (linkOpened) {
     // Si gioca il puzzle del link.
-  } else if (saved.puzzle && saved.variant && saved.game) {
-    // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
-    syncDifficulties();
-    startGame(saved.puzzle, saved.variant, "", saved);
+  } else if (resume()) {
     warnBadLink();
   } else {
     void newGame().then(warnBadLink);

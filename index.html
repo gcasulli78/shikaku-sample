@@ -12,6 +12,9 @@
       <header class="top">
         <h1>Shikaku</h1>
         <span class="timer" id="timer" aria-label="Tempo">0:00</span>
+        <button type="button" class="icon-btn" id="tutorial-btn" title="Come si gioca" aria-label="Come si gioca">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="share" title="Condividi questo puzzle" aria-label="Condividi questo puzzle" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
         </button>
@@ -46,6 +49,18 @@
           <select id="variant"></select>
         </label>
         <button type="button" class="btn primary" id="new">Nuova partita</button>
+      </section>
+
+      <section class="tutorial" id="tutorial" aria-labelledby="tutorial-title" hidden>
+        <p class="tutorial-step" id="tutorial-step"></p>
+        <h2 id="tutorial-title"></h2>
+        <p id="tutorial-text"></p>
+        <p class="tutorial-done" id="tutorial-done" aria-live="polite" hidden></p>
+        <div class="tutorial-actions">
+          <button type="button" class="btn" id="tutorial-prev">Indietro</button>
+          <button type="button" class="btn" id="tutorial-exit">Esci</button>
+          <button type="button" class="btn primary" id="tutorial-next">Avanti</button>
+        </div>
       </section>
 
       <p class="status" id="status" aria-live="polite"></p>
