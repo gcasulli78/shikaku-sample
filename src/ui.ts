@@ -142,7 +142,12 @@ function wrongText(why: WrongReason, rect: Rect): string {
   }
 }
 
+function waitText(ms: number): string {
+  return `Il prossimo pezzo si può mostrare tra ${Math.ceil(ms / 1000)} s.`;
+}
+
 function hintText(hint: Hint): string {
+  if ("wait" in hint) return waitText(hint.wait);
   if ("removed" in hint) {
     const why = wrongText(hint.wrong.why, hint.wrong.rect);
     return hint.removed.length === 1
@@ -156,6 +161,7 @@ function hintText(hint: Hint): string {
 
 /** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva. */
 function hintSpots(hint: Hint): { r: number; c: number }[] {
+  if ("wait" in hint) return [];
   if ("removed" in hint) {
     const { why } = hint.wrong;
     return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
@@ -679,15 +685,22 @@ export function startApp(): void {
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
-    hintBtn.disabled = solved;
-    hintBtn.textContent = HINT_LABELS[game.hintStage]!;
+    syncHintButton();
     checkBtn.disabled = solved || game.placed.length === 0;
     shareBtn.disabled = false;
     renderTimer();
   };
 
+  /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
+  const syncHintButton = () => {
+    const wait = game.hintStage === 2 ? game.cooldown() : 0;
+    hintBtn.disabled = solved || wait > 0;
+    hintBtn.textContent = wait > 0 ? `${HINT_LABELS[2]} (${Math.ceil(wait / 1000)} s)` : HINT_LABELS[game.hintStage]!;
+  };
+
   const renderTimer = () => {
     timerEl.textContent = formatTime(timer.elapsed());
+    if (game) syncHintButton();
   };
   setInterval(renderTimer, 250);
 
@@ -888,8 +901,14 @@ export function startApp(): void {
   });
   hintBtn.addEventListener("click", () => {
     firstInput();
+    const hint = game.hint();
+    if (hint && "wait" in hint) {
+      // Troppo presto per un altro pezzo: restano evidenziati indizio e motivo già mostrati.
+      notice = waitText(hint.wait);
+      return render();
+    }
     clearMessages();
-    lastHint = game.hint();
+    lastHint = hint;
     afterMove();
   });
   checkBtn.addEventListener("click", () => {
@@ -990,6 +1009,8 @@ export function startApp(): void {
     startGame(completePuzzle({ rows, cols, clues, blocked })!, step.variant, {
       status: `Come si gioca · ${index + 1} di ${TUTORIAL.length}`,
     });
+    // Nel tutorial si impara: nessuna attesa tra un pezzo suggerito e l'altro.
+    game.hintCooldown = 0;
     tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
     tutorialTitle.textContent = step.title;
     tutorialText.textContent = step.text;

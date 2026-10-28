@@ -37,7 +37,7 @@ Il pulsante **?** apre un tutorial di sei griglie piccole, una per regola: le re
 
 ## Aiuti
 
-- **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 vuole 8 caselle, qui ce ne sono 6" o "così il 4 non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati.
+- **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 vuole 8 caselle, qui ce ne sono 6" o "così il 4 non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati. Tra un pezzo suggerito e il successivo devono passare 15 secondi (il pulsante mostra il conto alla rovescia); indizio e ragionamento restano sempre disponibili.
 - **Verifica**: dice solo se ci sono errori e quanti, senza indicarli.
 
 ## Tastiera

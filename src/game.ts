@@ -35,17 +35,24 @@ export type WrongReason =
  * Esito di un suggerimento, a gradi: prima l'indizio su cui ragionare (focus), poi il
  * motivo (explain), poi il pezzo posato (placed). Se ci sono rettangoli sbagliati si
  * tolgono tutti, spiegando il primo. Un pezzo posato senza motivo viene dalla soluzione,
- * quando le regole del valutatore non bastano.
+ * quando le regole del valutatore non bastano. wait: il pezzo non si posa ancora, mancano
+ * tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito).
  */
 export type Hint =
   | { removed: Rect[]; wrong: { rect: Rect; why: WrongReason } }
+  | { wait: number }
   | { focus: Reason }
   | { explain: Reason }
   | { placed: Rect; reason?: Reason };
 
+/** Attesa minima tra due pezzi posati dal suggerimento, in ms (decisa dall'utente). */
+export const HINT_COOLDOWN = 15_000;
+
 export interface SavedGame {
   rects: Rect[];
   hintsUsed: number;
+  /** Quando il suggerimento ha posato l'ultimo pezzo (Date.now). */
+  lastPlacedAt?: number;
   /** Usato un aiuto qualsiasi (anche solo un grado del suggerimento o la verifica). */
   helped?: boolean;
 }
@@ -60,6 +67,10 @@ export class Game {
   helped = false;
   /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
   private pending: { rect: Rect; reason: Reason; stage: 1 | 2 } | undefined;
+  /** Quando il suggerimento ha posato l'ultimo pezzo (Date.now); vedi HINT_COOLDOWN. */
+  private lastPlacedAt: number | undefined;
+  /** Attesa tra due pezzi suggeriti: 0 nel tutorial. */
+  hintCooldown = HINT_COOLDOWN;
   /** Caselle nere, una per cella (r * cols + c). */
   private readonly black: Uint8Array;
 
@@ -71,7 +82,12 @@ export class Game {
 
   /** Lo stato da salvare: rettangoli posati e suggerimenti usati (la cronologia di Annulla no). */
   snapshot(): SavedGame {
-    return { rects: this.rects.map((rect) => ({ ...rect })), hintsUsed: this.hintsUsed, helped: this.helped };
+    return {
+      rects: this.rects.map((rect) => ({ ...rect })),
+      hintsUsed: this.hintsUsed,
+      helped: this.helped,
+      lastPlacedAt: this.lastPlacedAt,
+    };
   }
 
   /** Riprende una partita salvata; i rettangoli che si sovrappongono si scartano. */
@@ -80,6 +96,7 @@ export class Game {
     for (const rect of saved.rects) if (game.canPlace(rect)) game.rects.push({ ...rect });
     game.hintsUsed = saved.hintsUsed;
     game.helped = saved.helped ?? saved.hintsUsed > 0;
+    game.lastPlacedAt = saved.lastPlacedAt;
     return game;
   }
 
@@ -175,6 +192,11 @@ export class Game {
     return this.wrong().length;
   }
 
+  /** Quanti ms mancano prima che il suggerimento possa posare un altro pezzo. */
+  cooldown(now = Date.now()): number {
+    return this.lastPlacedAt === undefined ? 0 : Math.max(0, this.lastPlacedAt + this.hintCooldown - now);
+  }
+
   /** Il grado del suggerimento già mostrato: 0 nessuno, 1 l'indizio, 2 anche il motivo. */
   get hintStage(): 0 | 1 | 2 {
     return this.pending?.stage ?? 0;
@@ -186,7 +208,7 @@ export class Game {
    * gradi: indizio, motivo, pezzo. Se le regole non bastano posa subito un pezzo
    * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
    */
-  hint(): Hint | undefined {
+  hint(now = Date.now()): Hint | undefined {
     const wrong = this.wrong();
     if (wrong.length > 0) {
       const why = this.whyWrong(wrong[0]!);
@@ -201,7 +223,10 @@ export class Game {
     if (!this.pending) {
       const found = this.deduce();
       if (!found) {
+        const wait = this.cooldown(now);
+        if (wait > 0) return { wait };
         this.hintsUsed++;
+        this.lastPlacedAt = now;
         this.place(missing);
         return { placed: missing };
       }
@@ -213,7 +238,10 @@ export class Game {
       this.pending = { rect, reason, stage: 2 };
       return { explain: reason };
     }
+    const wait = this.cooldown(now);
+    if (wait > 0) return { wait };
     this.hintsUsed++;
+    this.lastPlacedAt = now;
     this.place(rect);
     return { placed: rect, reason };
   }

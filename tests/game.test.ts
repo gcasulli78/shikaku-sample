@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTime, Game, Timer } from "../src/game";
+import { formatTime, Game, HINT_COOLDOWN, Timer } from "../src/game";
 import { generate } from "../src/generator";
 import type { Puzzle } from "../src/types";
 
@@ -188,6 +188,27 @@ describe("Game", () => {
     expect(game.hintStage).toBe(0);
   });
 
+  it("tra due pezzi suggeriti servono 15 s; indizio e motivo restano sempre disponibili", () => {
+    const game = new Game(puzzle);
+    expect(game.hint(0)).toMatchObject({ focus: {} });
+    expect(game.hint(0)).toMatchObject({ explain: {} });
+    expect(game.hint(1000)).toMatchObject({ placed: { r: 0, c: 1, h: 2, w: 2 } });
+    expect(game.cooldown(1000)).toBe(HINT_COOLDOWN);
+    expect(game.hint(2000)).toMatchObject({ focus: {} });
+    expect(game.hint(3000)).toMatchObject({ explain: {} });
+    expect(game.hint(10_000)).toEqual({ wait: 6000 });
+    expect(game.placed).toHaveLength(1);
+    // L'attesa sopravvive al salvataggio.
+    const resumed = Game.restore(puzzle, JSON.parse(JSON.stringify(game.snapshot())));
+    expect(resumed.cooldown(10_000)).toBe(6000);
+    expect(game.hint(16_000)).toMatchObject({ placed: { r: 0, c: 0, h: 2, w: 1 } });
+    // Senza attesa (tutorial).
+    const tutorial = new Game(puzzle);
+    tutorial.hintCooldown = 0;
+    for (let i = 0; i < 6; i++) tutorial.hint(0);
+    expect(tutorial.isSolved()).toBe(true);
+  });
+
   it("verifica: quanti errori, senza dire quali; conta come aiuto", () => {
     const game = new Game(puzzle);
     expect(game.helped).toBe(false);
@@ -256,7 +277,12 @@ describe("Game", () => {
   it("risolvere a suon di suggerimenti vince sempre, ogni volta per deduzione", () => {
     for (const variant of ["classic", "shapes"] as const) {
       const game = new Game(generate({ rows: 10, cols: 10, seed: 7, variant }));
-      for (let hint = game.hint(); hint; hint = game.hint()) expect("placed" in hint ? hint.reason : true, variant).toBeTruthy();
+      // Un minuto tra un clic e l'altro: l'attesa tra due pezzi non scatta mai.
+      let now = 0;
+      for (let hint = game.hint(now); hint; hint = game.hint((now += 60_000))) {
+        expect("wait" in hint, variant).toBe(false);
+        expect("placed" in hint ? hint.reason : true, variant).toBeTruthy();
+      }
       expect(game.isSolved()).toBe(true);
     }
   });
