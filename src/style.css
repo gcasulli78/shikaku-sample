@@ -252,7 +252,8 @@ input,
   pointer-events: none;
 }
 
-/* Forme: il contorno dietro il numero dice quadrato o rettangolo non quadrato. */
+/* Forme: il contorno dietro il numero dice quadrato o rettangolo non quadrato.
+   Il rettangolo è disegnato incrociato (orizzontale + verticale): l'orientamento è libero. */
 .clue.square,
 .clue.oblong,
 .sample.square,
@@ -262,8 +263,10 @@ input,
 
 .clue.square::before,
 .clue.oblong::before,
+.clue.oblong::after,
 .sample.square::before,
-.sample.oblong::before {
+.sample.oblong::before,
+.sample.oblong::after {
   content: "";
   position: absolute;
   inset: 50% auto auto 50%;
@@ -274,7 +277,8 @@ input,
 }
 
 .clue.square::before,
-.clue.oblong::before {
+.clue.oblong::before,
+.clue.oblong::after {
   border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
 }
 
@@ -285,11 +289,17 @@ input,
 
 .clue.oblong::before {
   width: 86%;
-  height: 52%;
+  height: 46%;
+}
+
+.clue.oblong::after {
+  width: 46%;
+  height: 86%;
 }
 
 /* Senza numero il contorno si riempie appena, per vedersi bene anche da solo. */
-.clue.open::before {
+.clue.open::before,
+.clue.open::after {
   background: color-mix(in srgb, var(--clue-shape) 22%, transparent);
 }
 
@@ -314,7 +324,16 @@ input,
 
 .sample.oblong::before {
   width: 1.9em;
-  height: 1.05em;
+  height: 1em;
+}
+
+.sample.oblong::after {
+  width: 1em;
+  height: 1.9em;
+}
+
+.sample.oblong {
+  height: 1.9em;
 }
 
 .sample.square,
