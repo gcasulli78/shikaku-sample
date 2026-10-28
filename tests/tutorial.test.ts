@@ -10,6 +10,6 @@ describe("tutorial", () => {
     expect(puzzle.logical).toBe(true);
     expect(puzzle.difficulty).toBe(step.level);
     expect(nextDeduction(step, [])?.rule).toBe(step.firstRule);
-    if (step.variant === "classic") expect(step.clues.every((cl) => cl.n !== undefined && cl.shape === undefined)).toBe(true);
+    if (step.variant !== "shapes") expect(step.clues.every((cl) => cl.n !== undefined && cl.shape === undefined)).toBe(true);
   });
 });

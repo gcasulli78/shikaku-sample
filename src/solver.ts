@@ -4,7 +4,12 @@ export interface SolveInput {
   rows: number;
   cols: number;
   clues: Clue[];
+  /** Caselle nere (r * cols + c): nessun rettangolo le copre. */
+  blocked?: number[];
 }
+
+/** Nella mappa degli indizi: casella nera (gli indici ≥ 0 sono indizi, -1 casella libera). */
+export const BLOCKED = -2;
 
 export interface SolveResult {
   /** Soluzioni trovate, fermandosi a `limit`. */
@@ -21,9 +26,10 @@ export interface Candidate {
   cells: number[];
 }
 
-/** Indice di ogni cella → numero che contiene (-1 se vuota). */
+/** Indice di ogni cella → numero che contiene (-1 se vuota, BLOCKED se nera). */
 export function clueIndexMap(input: SolveInput): Int32Array {
   const clueAt = new Int32Array(input.rows * input.cols).fill(-1);
+  for (const idx of input.blocked ?? []) clueAt[idx] = BLOCKED;
   input.clues.forEach((cl, i) => (clueAt[cl.r * input.cols + cl.c] = i));
   return clueAt;
 }
@@ -39,7 +45,7 @@ function sizesFor(clue: Clue, rows: number, cols: number): [number, number][] {
   return sizes;
 }
 
-/** Tutti i rettangoli che rispettano l'indizio, lo contengono e non contengono altri indizi. */
+/** Tutti i rettangoli che rispettano l'indizio, lo contengono e non contengono altri indizi né caselle nere. */
 export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int32Array): Candidate[] {
   const { rows, cols, clues } = input;
   const clue = clues[clueIndex]!;
@@ -78,15 +84,18 @@ export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int3
 export function solve(input: SolveInput, limit = 2, maxNodes = Infinity): SolveResult {
   const { rows, cols, clues } = input;
   const total = rows * cols;
+  const blocked = input.blocked ?? [];
   const result: SolveResult = { count: 0, solutions: [], aborted: false };
   let nodes = 0;
 
   // Con tutte le aree note la somma deve tornare esatta; con aree aperte non può superare la griglia.
   const known = clues.filter((cl) => cl.n !== undefined);
   const sum = known.reduce((s, cl) => s + cl.n!, 0);
-  if (known.length === clues.length ? sum !== total : sum > total) return result;
+  const free = total - blocked.length;
+  if (known.length === clues.length ? sum !== free : sum > free) return result;
 
   const clueAt = new Int32Array(total).fill(-1);
+  for (const idx of blocked) clueAt[idx] = BLOCKED;
   for (let i = 0; i < clues.length; i++) {
     const cl = clues[i]!;
     const idx = cl.r * cols + cl.c;
@@ -95,12 +104,14 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity): SolveR
   }
 
   const candidates = clues.map((_, i) => candidatesFor(input, i, clueAt));
+  // Le caselle nere contano come già coperte.
   const occupied = new Uint8Array(total);
+  for (const idx of blocked) occupied[idx] = 1;
   const placed = new Uint8Array(clues.length);
   const chosen: (Rect | undefined)[] = new Array(clues.length);
   const coverCount = new Int32Array(total);
   let remaining = clues.length;
-  let covered = 0;
+  let covered = blocked.length;
 
   const isFree = (cand: Candidate) => cand.cells.every((idx) => occupied[idx] === 0);
 

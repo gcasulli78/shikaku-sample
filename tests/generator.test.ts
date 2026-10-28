@@ -16,8 +16,10 @@ const SIZES: [number, number][] = [
 ];
 const PUZZLES_PER_SIZE = 50;
 
-function expectExactCover(rows: number, cols: number, rects: Rect[]) {
+/** Copertura esatta della griglia, caselle nere escluse (contano come già coperte). */
+function expectExactCover(rows: number, cols: number, rects: Rect[], blocked: number[] = []) {
   const seen = new Uint8Array(rows * cols);
+  for (const idx of blocked) seen[idx] = 1;
   for (const rect of rects) {
     expect(rect.r).toBeGreaterThanOrEqual(0);
     expect(rect.c).toBeGreaterThanOrEqual(0);
@@ -34,7 +36,7 @@ function expectExactCover(rows: number, cols: number, rects: Rect[]) {
 }
 
 function expectValidPuzzle(p: Puzzle) {
-  expectExactCover(p.rows, p.cols, p.solution);
+  expectExactCover(p.rows, p.cols, p.solution, p.blocked);
   expect(p.clues).toHaveLength(p.solution.length);
   for (const rect of p.solution) {
     const inside = p.clues.filter((cl) => contains(rect, cl.r, cl.c));
@@ -144,6 +146,25 @@ describe("generate con difficoltà", () => {
   it("variante Classico: solo numeri", () => {
     const p = generate({ rows: 8, cols: 8, difficulty: "hard", seed: 1 });
     expect(p.clues.every((cl) => cl.n !== undefined && cl.shape === undefined)).toBe(true);
+  });
+
+  it("variante Caselle nere: quota di caselle nere, mai sotto un rettangolo, soluzione unica", () => {
+    for (const [difficulty, black] of [["easy", 8], ["hard", 8], ["expert", 3]] as [Difficulty, number][]) {
+      for (let seed = 1; seed <= 3; seed++) {
+        const p = generate({ rows: 10, cols: 10, difficulty, variant: "blocked", seed });
+        expectValidPuzzle(p);
+        // Si annerisce un pezzo intero, quindi si può sforare di una casella.
+        expect(p.blocked!.length, `${difficulty} seed ${seed}`).toBeGreaterThanOrEqual(black);
+        expect(p.blocked!.length).toBeLessThanOrEqual(black + 1);
+        expect(p.clues.some((cl) => p.blocked!.includes(cl.r * p.cols + cl.c))).toBe(false);
+        expect(countSolutions(p)).toBe(1);
+      }
+    }
+  }, 120_000);
+
+  it("Classico e Forme senza caselle nere", () => {
+    expect(generate({ rows: 8, cols: 8, seed: 1 }).blocked).toBeUndefined();
+    expect(generate({ rows: 8, cols: 8, seed: 1, variant: "shapes" }).blocked).toBeUndefined();
   });
 
   it("rispetta il limite di tempo", () => {

@@ -41,6 +41,12 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 - Il generatore sceglie il tipo di indizio con `SHAPE_KINDS` (pesi per livello); per rendere unica la soluzione prima **rivela** un'informazione, poi sposta l'indizio. Nel Classico non si estrae il tipo: a Maestro (partizione originale) i puzzle per seed sono gli stessi di prima.
 - Il valutatore ha un budget di passi (`WORK_BUDGET`): con molti indizi aperti le ipotesi profonde esplodevano fino a 10 s per valutazione. Finito il budget il puzzle risulta "non risolto", senza scartare forme a torto.
 
+## Variante Caselle nere
+
+- `Puzzle.blocked` / `SolveInput.blocked`: celle (r * cols + c) da non coprire. Nel solver sono `BLOCKED` nella mappa degli indizi (nessun candidato le contiene) e contano come già coperte; nel valutatore sono `occupied` fin dall'inizio, quindi tutte le regole le ignorano. `Game.canPlace` rifiuta i rettangoli che le coprono.
+- Il generatore non sparge caselle nere a caso (tolgono spazio ai pezzi grandi e rendono i puzzle troppo facili: con il 3% Maestro non si trovava più): parte dalla partizione normale e annerisce pezzi da 1–2 caselle, poi se servono strisce di 1–2 caselle dal bordo di rettangoli stretti (`blackenSmall`). Quota per livello in `BLACK_RATE` (8% fino a Difficile, 3% a Esperto e Maestro); su 15×15 Esperto e Maestro si trovano comunque più di rado che nel Classico.
+- Nel Classico e nelle Forme non si estrae nulla in più: stessi puzzle per seed di prima.
+
 ## Difficoltà
 
 Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) per chiudere il puzzle:
@@ -59,7 +65,7 @@ Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) 
 
 ## Tutorial
 
-- `tutorial.ts`: griglie scritte a mano, una per regola; i test (`tests/tutorial.test.ts`) verificano soluzione unica, livello del valutatore e prima regola usata. Se si cambiano le regole del valutatore, ricontrollare che ogni griglia insegni ancora la sua.
+- `tutorial.ts`: griglie scritte a mano, una per regola (più una per variante); i test (`tests/tutorial.test.ts`) verificano soluzione unica, livello del valutatore e prima regola usata. Se si cambiano le regole del valutatore, ricontrollare che ogni griglia insegni ancora la sua.
 - Il tutorial gioca sulla griglia vera: durante il tutorial niente salvataggio, record né riquadro di vittoria; uscendo si riprende la partita salvata (o se ne crea una nuova). Nuova partita o un link chiudono il tutorial.
 
 ## Partite salvate, record, link

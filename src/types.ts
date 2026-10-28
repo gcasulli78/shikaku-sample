@@ -36,17 +36,20 @@ export function fits(clue: Clue, rect: Rect): boolean {
   return clue.shape === "oblong" ? shape !== "square" : clue.shape === shape;
 }
 
-export type Variant = "classic" | "shapes";
+export type Variant = "classic" | "shapes" | "blocked";
 
 export const VARIANTS: { id: Variant; label: string }[] = [
   { id: "classic", label: "Classico" },
   { id: "shapes", label: "Forme" },
+  { id: "blocked", label: "Caselle nere" },
 ];
 
 export interface Puzzle {
   rows: number;
   cols: number;
   clues: Clue[];
+  /** Caselle nere (r * cols + c), da non coprire: solo nella variante Caselle nere. */
+  blocked?: number[];
   /** Una soluzione (con unicità garantita è l'unica). */
   solution: Rect[];
 }

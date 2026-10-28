@@ -236,10 +236,13 @@ function ruleGuess(s: State, total: number, guess: { options: number; level: num
 
 function initialState(input: SolveInput): State {
   const clueAt = clueIndexMap(input);
+  // Le caselle nere sono come già coperte: nessuna regola deve occuparsene.
+  const occupied = new Uint8Array(input.rows * input.cols);
+  for (const idx of input.blocked ?? []) occupied[idx] = 1;
   return {
     cands: input.clues.map((_, i) => candidatesFor(input, i, clueAt)),
     placed: input.clues.map(() => undefined),
-    occupied: new Uint8Array(input.rows * input.cols),
+    occupied,
   };
 }
 

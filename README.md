@@ -33,7 +33,7 @@ La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il D
 
 ## Come si gioca
 
-Il pulsante **?** apre un tutorial di cinque griglie piccole, una per regola: le regole del gioco, la casella che può raggiungere un solo numero, niente buchi, le ipotesi, la variante Forme. Si giocano sulla griglia vera, con il suggerimento come aiuto; uscendo si riprende la partita di prima.
+Il pulsante **?** apre un tutorial di sei griglie piccole, una per regola: le regole del gioco, la casella che può raggiungere un solo numero, niente buchi, le ipotesi, le varianti Forme e Caselle nere. Si giocano sulla griglia vera, con il suggerimento come aiuto; uscendo si riprende la partita di prima.
 
 ## Aiuti
 
@@ -56,6 +56,7 @@ Tutto resta nel browser (`localStorage`): niente server, niente account.
 
 - **Classico**: ogni indizio è un numero, cioè l'area del suo rettangolo.
 - **Forme**: un indizio può dire anche la forma, e area o forma possono restare aperte.
+- **Caselle nere**: numeri come nel Classico, ma alcune caselle sono nere e non vanno coperte: i rettangoli ci girano attorno (l'8% fino a Difficile, il 3% a Esperto e Maestro, dove su 15×15 il livello si trova più di rado).
 
 | Indizio | Significato |
 | --- | --- |

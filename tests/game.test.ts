@@ -215,6 +215,30 @@ describe("Game", () => {
     expect(broken.helped).toBe(false);
   });
 
+  it("caselle nere: non si coprono e non servono per vincere", () => {
+    //  4 . 1
+    //  . . #
+    const game = new Game({
+      rows: 2,
+      cols: 3,
+      clues: [
+        { r: 0, c: 0, n: 4 },
+        { r: 0, c: 2, n: 1 },
+      ],
+      blocked: [5],
+      solution: [
+        { r: 0, c: 0, h: 2, w: 2 },
+        { r: 0, c: 2, h: 1, w: 1 },
+      ],
+    });
+    expect(game.isBlocked(1, 2)).toBe(true);
+    expect(game.intent({ r: 0, c: 1, h: 2, w: 2 })).toBe("blocked");
+    expect(game.place({ r: 0, c: 0, h: 2, w: 2 })).toBe(true);
+    expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("place");
+    game.place({ r: 0, c: 2, h: 1, w: 1 });
+    expect(game.isSolved()).toBe(true);
+  });
+
   it("vittoria solo con griglia completa e corretta", () => {
     const game = new Game(puzzle);
     expect(game.isSolved()).toBe(false);

@@ -7,20 +7,22 @@ import { DIFFICULTIES, MAX_SIZE, MIN_SIZE, type Clue, type Shape, type Variant }
  * Un puzzle nel link: gli indizi stessi, non il seed. Il generatore ha un tempo limite,
  * quindi lo stesso seed su un dispositivo lento può dare un altro puzzle, e cambiando il
  * generatore cambierebbero i link vecchi. Formato, in base64url:
- *   versione, variante, righe, colonne, poi per indizio: cella (r * cols + c),
- *   un byte con numero sì/no (bit 3) e forma (bit 0-2), e il numero se c'è.
+ *   versione, variante, righe, colonne; con le Caselle nere quante sono e le loro celle;
+ *   poi per indizio: cella (r * cols + c), un byte con numero sì/no (bit 3) e forma
+ *   (bit 0-2), e il numero se c'è.
  */
 const VERSION = 1;
 const SHAPES: (Shape | undefined)[] = [undefined, "square", "oblong", "wide", "tall"];
-const VARIANT_CODES: Variant[] = ["classic", "shapes"];
+const VARIANT_CODES: Variant[] = ["classic", "shapes", "blocked"];
 const HAS_N = 8;
 
 export interface SharedPuzzle extends SolveInput {
   variant: Variant;
 }
 
-export function encodePuzzle({ rows, cols, clues, variant }: SharedPuzzle): string {
+export function encodePuzzle({ rows, cols, clues, blocked, variant }: SharedPuzzle): string {
   const bytes = [VERSION, VARIANT_CODES.indexOf(variant), rows, cols];
+  if (variant === "blocked") bytes.push(blocked?.length ?? 0, ...(blocked ?? []));
   for (const clue of clues) {
     bytes.push(clue.r * cols + clue.c, SHAPES.indexOf(clue.shape) | (clue.n !== undefined ? HAS_N : 0));
     if (clue.n !== undefined) bytes.push(clue.n);
@@ -45,7 +47,18 @@ export function decodePuzzle(code: string): SharedPuzzle | undefined {
   if (rows < MIN_SIZE || rows > MAX_SIZE || cols < MIN_SIZE || cols > MAX_SIZE) return undefined;
   const clues: Clue[] = [];
   const used = new Set<number>();
-  for (let k = 4; k < bytes.length; ) {
+  let k = 4;
+  const blocked: number[] = [];
+  if (variant === "blocked") {
+    const count = bytes[k++] ?? 0;
+    for (let b = 0; b < count; b++) {
+      const cell = bytes[k++];
+      if (cell === undefined || cell >= rows * cols || used.has(cell)) return undefined;
+      used.add(cell);
+      blocked.push(cell);
+    }
+  }
+  while (k < bytes.length) {
     const cell = bytes[k++]!;
     const flags = bytes[k++];
     if (flags === undefined || cell >= rows * cols || used.has(cell) || (flags & 7) >= SHAPES.length) return undefined;
@@ -60,7 +73,8 @@ export function decodePuzzle(code: string): SharedPuzzle | undefined {
     }
     clues.push(clue);
   }
-  return clues.length > 0 ? { rows, cols, clues, variant } : undefined;
+  if (clues.length === 0) return undefined;
+  return blocked.length > 0 ? { rows, cols, clues, blocked, variant } : { rows, cols, clues, variant };
 }
 
 /** Passi massimi del solver per un puzzle da link (uno generato ne chiede di solito meno di mille). */

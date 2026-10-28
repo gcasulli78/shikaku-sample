@@ -532,7 +532,7 @@ export function startApp(): void {
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
-    const variantNote = variant === "shapes" ? ` · ${variantLabel(variant)}` : "";
+    const variantNote = variant !== "classic" ? ` · ${variantLabel(variant)}` : "";
     gameStatus = saved?.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`;
     save();
     render();
@@ -589,6 +589,7 @@ export function startApp(): void {
         cell.className = "cell";
         if (c === cols - 1) cell.classList.add("last-col");
         if (r === rows - 1) cell.classList.add("last-row");
+        if (game.isBlocked(r, c)) cell.classList.add("black");
         cell.style.gridArea = `${r + 1} / ${c + 1}`;
         board.append(cell);
       }
@@ -683,7 +684,7 @@ export function startApp(): void {
     if (game.isSolved()) {
       solved = true;
       timer.pause();
-      const variant = gameVariant === "shapes" ? ` · ${variantLabel(gameVariant)}` : "";
+      const variant = gameVariant !== "classic" ? ` · ${variantLabel(gameVariant)}` : "";
       const time = timer.elapsed();
       winText.textContent =
         `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(time)}` +
@@ -791,7 +792,7 @@ export function startApp(): void {
     const rect = game.rectAt(r, c);
     const parts = [`Riga ${r + 1}, colonna ${c + 1}`];
     if (clue) parts.push(`indizio: ${clueLabel(clue)}`);
-    parts.push(rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
+    parts.push(game.isBlocked(r, c) ? "casella nera" : rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
     if (anchor) {
       const sel = rectFromCorners(...anchor, ...cursor);
       parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
@@ -874,8 +875,8 @@ export function startApp(): void {
 
   // --- Condividere ---
   shareBtn.addEventListener("click", async () => {
-    const { rows, cols, clues } = game.puzzle;
-    const url = location.href.split("#")[0] + LINK_PREFIX + encodePuzzle({ rows, cols, clues, variant: gameVariant });
+    const { rows, cols, clues, blocked } = game.puzzle;
+    const url = location.href.split("#")[0] + LINK_PREFIX + encodePuzzle({ rows, cols, clues, blocked, variant: gameVariant });
     // Sul telefono il menu di condivisione, sul computer il link copiato.
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       try {
@@ -917,7 +918,7 @@ export function startApp(): void {
       const body = table.createTBody();
       for (const { rows: r, cols: c, difficulty: d, variant: v, rec } of rows) {
         const tr = body.insertRow();
-        const variant = v === "shapes" ? ` · ${variantLabel(v)}` : "";
+        const variant = v !== "classic" ? ` · ${variantLabel(v)}` : "";
         for (const text of [`${r}×${c} · ${difficultyLabel(d)}${variant}`, String(rec.wins), recordTime(rec.best), recordTime(rec.bestClean)]) {
           tr.insertCell().textContent = text;
         }
@@ -957,7 +958,8 @@ export function startApp(): void {
   const showTutorial = (index: number) => {
     const step = TUTORIAL[index]!;
     tutorialStep = index;
-    startGame(completePuzzle({ rows: step.rows, cols: step.cols, clues: step.clues })!, step.variant, "");
+    const { rows, cols, clues, blocked } = step;
+    startGame(completePuzzle(blocked ? { rows, cols, clues, blocked } : { rows, cols, clues })!, step.variant, "");
     gameStatus = `Come si gioca · ${index + 1} di ${TUTORIAL.length}`;
     tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
     tutorialTitle.textContent = step.title;

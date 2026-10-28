@@ -52,6 +52,24 @@ describe("solver", () => {
   });
 });
 
+describe("caselle nere", () => {
+  it("nessun rettangolo le copre, e non vanno coperte", () => {
+    //  4 . 1
+    //  . . #     con la casella nera in basso a destra il 4 è il 2×2 a sinistra
+    const input = { rows: 2, cols: 3, clues: [{ r: 0, c: 0, n: 4 }, { r: 0, c: 2, n: 1 }], blocked: [5] };
+    const result = solve(input, 2);
+    expect(result.count).toBe(1);
+    expect(result.solutions[0]).toEqual([
+      { r: 0, c: 0, h: 2, w: 2 },
+      { r: 0, c: 2, h: 1, w: 1 },
+    ]);
+    // Senza la casella nera le aree non tornano.
+    expect(countSolutions({ rows: 2, cols: 3, clues: input.clues })).toBe(0);
+    // Un indizio su una casella nera rende il puzzle impossibile.
+    expect(countSolutions({ ...input, blocked: [0] })).toBe(0);
+  });
+});
+
 describe("indizi con forma e area aperte", () => {
   const grid2 = (clue: Clue) => ({ rows: 2, cols: 2, clues: [clue] });
   const count = (clue: Clue) => candidatesFor(grid2(clue), 0, clueIndexMap(grid2(clue))).length;

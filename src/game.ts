@@ -125,9 +125,15 @@ export class Game {
     return this.rects.find((rect) => contains(rect, r, c));
   }
 
-  /** Libero se non sovrappone nessun rettangolo già posato. */
+  isBlocked(r: number, c: number): boolean {
+    return this.puzzle.blocked?.includes(r * this.puzzle.cols + c) ?? false;
+  }
+
+  /** Libero se non sovrappone nessun rettangolo già posato né caselle nere. */
   canPlace(rect: Rect): boolean {
-    return !this.rects.some((other) => overlaps(other, rect));
+    if (this.rects.some((other) => overlaps(other, rect))) return false;
+    const { cols } = this.puzzle;
+    return !this.puzzle.blocked?.some((idx) => contains(rect, Math.floor(idx / cols), idx % cols));
   }
 
   /** Posa un rettangolo solo se non ne sovrappone altri; false se rifiutato. */
@@ -236,7 +242,8 @@ export class Game {
 
   isSolved(): boolean {
     const covered = this.rects.reduce((sum, rect) => sum + area(rect), 0);
-    return covered === this.puzzle.rows * this.puzzle.cols && this.rects.every((rect) => this.isValid(rect));
+    const free = this.puzzle.rows * this.puzzle.cols - (this.puzzle.blocked?.length ?? 0);
+    return covered === free && this.rects.every((rect) => this.isValid(rect));
   }
 
   private apply(action: Action): void {

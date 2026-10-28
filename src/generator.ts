@@ -1,6 +1,6 @@
 import { grade } from "./grader";
 import { createRng, pick, randomSeed, type Rng } from "./rng";
-import { solve } from "./solver";
+import { solve, type SolveInput } from "./solver";
 import {
   area,
   difficultyLevel,
@@ -18,7 +18,7 @@ export interface GenerateOptions {
   rows: number;
   cols: number;
   difficulty?: Difficulty;
-  /** Classico (solo numeri, predefinito) o Forme (indizi con forma e area anche aperte). */
+  /** Classico (solo numeri, predefinito), Forme (indizi con forma e area anche aperte) o Caselle nere. */
   variant?: Variant;
   seed?: number;
   /** Puzzle a soluzione unica da valutare prima di accontentarsi del più vicino. */
@@ -98,8 +98,8 @@ function pickWeighted<T>(rng: Rng, items: readonly T[], weight: (item: T) => num
 const WIDE_WEIGHT = 2;
 
 /**
- * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi.
- * `balanced`: tanti orizzontali quanti verticali (vedi layout).
+ * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi, tranne le
+ * caselle nere. `balanced`: tanti orizzontali quanti verticali (vedi layout).
  */
 export function partition(
   rows: number,
@@ -107,9 +107,11 @@ export function partition(
   rng: Rng,
   profile: Profile = PROFILES.medium,
   balanced = false,
+  blocked: readonly number[] = [],
 ): Rect[] {
   const maxArea = maxAreaFor(rows, cols, profile);
   const used = new Uint8Array(rows * cols);
+  for (const idx of blocked) used[idx] = 1;
   const rects: Rect[] = [];
   const shapeWeight = (o: Rect) =>
     Math.pow(area(o), profile.sizeExp) *
@@ -240,6 +242,53 @@ function pickCell(rect: Rect, rng: Rng, profile: Profile): { r: number; c: numbe
   return pickWeighted(rng, cells, (cell) => Math.pow(1 + depth(cell), profile.interior));
 }
 
+/**
+ * Quota di caselle nere nella variante Caselle nere. Le caselle nere tolgono possibilità
+ * e rendono i puzzle più facili: misurato (8 seed) con l'8% fino a Difficile si trova
+ * sempre il livello (8×15 Difficile 7/8); ai livelli alti con l'8% Esperto e Maestro sul
+ * 15×15 scendevano a 1/8 e 0/8, con il 3% a 3/8 e 2/8 (4/8 e 2/8 col tempo doppio della
+ * preparazione in anticipo), 10×10 7/8 e 6/8.
+ */
+export const BLACK_RATE: Record<Difficulty, number> = { easy: 0.08, medium: 0.08, hard: 0.08, expert: 0.03, master: 0.03 };
+
+/**
+ * Annerisce pezzi piccoli (1 o 2 caselle) della partizione fino alla quota di caselle
+ * nere. Ai livelli alti i pezzi piccoli sono pochi: allora si taglia via una striscia di
+ * 1 o 2 caselle dal bordo di un rettangolo stretto (che resta un rettangolo).
+ * Caselle nere sparse a caso, invece, tolgono spazio ai pezzi grandi e rendono i
+ * puzzle troppo facili: con il 3% Maestro non si trovava più (misurato).
+ */
+function blackenSmall(s: Setup, rects: Rect[]): { solution: Rect[]; blocked: number[] } {
+  const { rng, cols } = s;
+  const target = Math.round(s.rows * cols * s.blackRate);
+  const solution = [...rects];
+  const blocked: number[] = [];
+  const blacken = (rect: Rect) => {
+    for (let r = rect.r; r < rect.r + rect.h; r++) for (let c = rect.c; c < rect.c + rect.w; c++) blocked.push(r * cols + c);
+  };
+  const small = solution.filter((rect) => area(rect) <= 2);
+  while (blocked.length < target && small.length > 0) {
+    const rect = small.splice(Math.floor(rng() * small.length), 1)[0]!;
+    solution.splice(solution.indexOf(rect), 1);
+    blacken(rect);
+  }
+  // Strisce: un rettangolo largo 1–2 perde la prima o l'ultima riga, uno alto 1–2 una colonna.
+  const narrow = solution.map((_, i) => i).filter((i) => area(solution[i]!) > 2 && Math.min(solution[i]!.h, solution[i]!.w) <= 2);
+  while (blocked.length < target && narrow.length > 0) {
+    const i = narrow.splice(Math.floor(rng() * narrow.length), 1)[0]!;
+    const rect = solution[i]!;
+    const first = rng() < 0.5;
+    if (rect.w <= 2 && rect.h > 1) {
+      blacken({ r: first ? rect.r : rect.r + rect.h - 1, c: rect.c, h: 1, w: rect.w });
+      solution[i] = { ...rect, r: first ? rect.r + 1 : rect.r, h: rect.h - 1 };
+    } else {
+      blacken({ r: rect.r, c: first ? rect.c : rect.c + rect.w - 1, h: rect.h, w: 1 });
+      solution[i] = { ...rect, c: first ? rect.c + 1 : rect.c, w: rect.w - 1 };
+    }
+  }
+  return { solution, blocked: blocked.sort((a, b) => a - b) };
+}
+
 /** Come si costruisce un puzzle: dimensioni, casualità, profilo del livello e tipi di indizio. */
 interface Setup {
   rows: number;
@@ -251,6 +300,8 @@ interface Setup {
   oriented: number;
   /** Partizione bilanciata tra orizzontali e verticali (BALANCED). */
   balanced: boolean;
+  /** Quota di caselle nere (BLACK_RATE), 0 fuori dalla variante Caselle nere. */
+  blackRate: number;
 }
 
 function placeClue(rect: Rect, s: Setup): Clue {
@@ -300,9 +351,12 @@ const SOLVE_BUDGET = 20_000;
  */
 export const BALANCED: Record<Difficulty, boolean> = { easy: true, medium: true, hard: true, expert: true, master: false };
 
-function layout(s: Setup): Rect[] {
-  return partition(s.rows, s.cols, s.rng, s.profile, s.balanced);
+function layout(s: Setup, blocked: readonly number[]): Rect[] {
+  return partition(s.rows, s.cols, s.rng, s.profile, s.balanced, blocked);
 }
+
+/** Dimensioni e caselle nere: tutto ciò che serve a solver e valutatore oltre agli indizi. */
+type Board = Omit<SolveInput, "clues">;
 
 /**
  * Puzzle con soluzione unica: partizione casuale, un indizio per rettangolo, poi
@@ -311,16 +365,17 @@ function layout(s: Setup): Rect[] {
  * completi); se non basta si riparte con una nuova partizione.
  */
 function generateUnique(s: Setup, maxAttempts: number, maxFixes: number) {
-  const { rows, cols } = s;
-  let fallback: { clues: Clue[]; solution: Rect[]; unique: boolean } | undefined;
+  let fallback: { board: Board; clues: Clue[]; solution: Rect[]; unique: boolean } | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const solution = layout(s);
+    // Nel Classico e nelle Forme nessuna estrazione: stessa sequenza casuale di prima.
+    const { solution, blocked } = s.blackRate > 0 ? blackenSmall(s, layout(s, [])) : { solution: layout(s, []), blocked: [] };
+    const board: Board = blocked.length > 0 ? { rows: s.rows, cols: s.cols, blocked } : { rows: s.rows, cols: s.cols };
     const clues = solution.map((rect) => placeClue(rect, s));
 
     for (let fix = 0; fix <= maxFixes; fix++) {
-      const { count, solutions, aborted } = solve({ rows, cols, clues }, 2, SOLVE_BUDGET);
-      if (!aborted && count === 1) return { clues, solution, unique: true };
-      fallback ??= { clues: clues.map((cl) => ({ ...cl })), solution, unique: false };
+      const { count, solutions, aborted } = solve({ ...board, clues }, 2, SOLVE_BUDGET);
+      if (!aborted && count === 1) return { board, clues, solution, unique: true };
+      fallback ??= { board, clues: clues.map((cl) => ({ ...cl })), solution, unique: false };
       // Ricerca troppo lunga: unicità non verificabile, meglio un'altra partizione.
       if (aborted) break;
 
@@ -340,8 +395,8 @@ function generateUnique(s: Setup, maxAttempts: number, maxFixes: number) {
  * Livello misurato; i puzzle che il valutatore non chiude valgono DIFFICULTIES.length.
  * Sotto Maestro la regola più costosa non serve: basta sapere che si va oltre Esperto.
  */
-function measure(rows: number, cols: number, clues: Clue[], targetLevel: number): { level: number; steps: number } {
-  const graded = grade({ rows, cols, clues }, Math.max(3, targetLevel));
+function measure(board: Board, clues: Clue[], targetLevel: number): { level: number; steps: number } {
+  const graded = grade({ ...board, clues }, Math.max(3, targetLevel));
   if (!graded.solved) return { level: DIFFICULTIES.length, steps: 0 };
   const level = difficultyLevel(graded.difficulty);
   return { level, steps: graded.steps[level]! };
@@ -353,10 +408,18 @@ function measure(rows: number, cols: number, clues: Clue[], targetLevel: number)
  * resta unica e la difficoltà si avvicina all'obiettivo (a parità di livello, più
  * passaggi al livello più alto se si sale, meno se si scende).
  */
-function tune(s: Setup, clues: Clue[], solution: Rect[], targetLevel: number, moves: number, outOfTime: () => boolean) {
-  const { rows, cols, rng } = s;
+function tune(
+  s: Setup,
+  board: Board,
+  clues: Clue[],
+  solution: Rect[],
+  targetLevel: number,
+  moves: number,
+  outOfTime: () => boolean,
+) {
+  const { rng } = s;
   const shapes = s.kinds !== CLASSIC_KINDS;
-  let current = measure(rows, cols, clues, targetLevel);
+  let current = measure(board, clues, targetLevel);
   // Un indizio in un 1×1 non si può spostare, ma nelle Forme può cambiare tipo.
   const movable = solution.map((_, i) => i).filter((i) => shapes || area(solution[i]!) > 1);
   if (movable.length === 0) return current;
@@ -374,9 +437,9 @@ function tune(s: Setup, clues: Clue[], solution: Rect[], targetLevel: number, mo
     clues[i] = moved;
     // Il valutatore scarta solo forme impossibili: se chiude il puzzle, la soluzione è unica
     // e il solver serve solo quando non ci arriva.
-    const measured = measure(rows, cols, clues, targetLevel);
+    const measured = measure(board, clues, targetLevel);
     const unsolved = measured.level === DIFFICULTIES.length;
-    const check = unsolved ? solve({ rows, cols, clues }, 2, SOLVE_BUDGET) : undefined;
+    const check = unsolved ? solve({ ...board, clues }, 2, SOLVE_BUDGET) : undefined;
     const next = !check || (!check.aborted && check.count === 1) ? measured : undefined;
     if (next && cost(next) <= cost(current)) current = next;
     else clues[i] = previous;
@@ -406,6 +469,7 @@ export function generate(options: GenerateOptions): GenerateResult {
     kinds: options.variant === "shapes" ? SHAPE_KINDS[target] : CLASSIC_KINDS,
     oriented: options.variant === "shapes" ? ORIENTED[target] : 0,
     balanced: BALANCED[target],
+    blackRate: options.variant === "blocked" ? BLACK_RATE[target] : 0,
   };
   const deadline = options.timeLimitMs === undefined ? Infinity : Date.now() + options.timeLimitMs;
   const outOfTime = () => Date.now() > deadline;
@@ -413,12 +477,12 @@ export function generate(options: GenerateOptions): GenerateResult {
   let best: { result: GenerateResult; distance: number } | undefined;
   // Almeno un candidato anche a tempo scaduto.
   for (let k = 0; k < maxCandidates && (k === 0 || !outOfTime()); k++) {
-    const { clues, solution, unique } = generateUnique(s, maxAttempts, maxFixes);
+    const { board, clues, solution, unique } = generateUnique(s, maxAttempts, maxFixes);
     const { level } = unique
-      ? tune(s, clues, solution, targetLevel, tuneMoves, outOfTime)
-      : measure(rows, cols, clues, targetLevel);
+      ? tune(s, board, clues, solution, targetLevel, tuneMoves, outOfTime)
+      : measure(board, clues, targetLevel);
     const logical = level < DIFFICULTIES.length;
-    const result: GenerateResult = { rows, cols, clues, solution, seed, unique, logical, difficulty: labelFor(level) };
+    const result: GenerateResult = { ...board, clues, solution, seed, unique, logical, difficulty: labelFor(level) };
     // Un puzzle non unico è sempre l'ultima scelta, uno che il valutatore non chiude la penultima.
     const distance = Math.abs(level - targetLevel) + (logical ? 0 : 50) + (unique ? 0 : 100);
     if (distance === 0) return result;

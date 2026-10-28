@@ -14,6 +14,14 @@ describe("link condivisibile", () => {
     }
   });
 
+  it("Caselle nere: anche le caselle nere nel link", () => {
+    const p = generate({ rows: 10, cols: 10, difficulty: "medium", variant: "blocked", seed: 2 });
+    const linked = puzzleFromCode(encodePuzzle({ ...p, variant: "blocked" }))!;
+    expect(linked.variant).toBe("blocked");
+    expect(linked.puzzle.blocked).toEqual(p.blocked);
+    expect(linked.puzzle.solution).toEqual(p.solution);
+  });
+
   it("dal codice si ricostruiscono soluzione e livello", () => {
     const p = generate({ rows: 8, cols: 12, difficulty: "expert", variant: "shapes", seed: 5 });
     const linked = puzzleFromCode(encodePuzzle({ ...p, variant: "shapes" }))!;

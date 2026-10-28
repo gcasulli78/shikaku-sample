@@ -9,6 +9,8 @@ export interface TutorialStep {
   rows: number;
   cols: number;
   clues: Clue[];
+  /** Caselle nere (r * cols + c), solo nella variante Caselle nere. */
+  blocked?: number[];
   /** Livello del valutatore e prima regola che serve (verificati dai test). */
   level: Difficulty;
   firstRule: Rule;
@@ -102,6 +104,25 @@ export const TUTORIAL: TutorialStep[] = [
       { r: 3, c: 0, n: 4 },
       { r: 3, c: 3, n: 4, shape: "square" },
     ],
+    level: "medium",
+    firstRule: "single",
+  },
+  {
+    title: "Variante Caselle nere",
+    text:
+      "Nella variante Caselle nere i numeri funzionano come nel Classico, ma le caselle scure non si coprono: " +
+      "i rettangoli ci girano attorno, e spesso sono proprio loro a dire dove non può andare un numero.",
+    variant: "blocked",
+    rows: 5,
+    cols: 5,
+    clues: [
+      { r: 1, c: 0, n: 5 },
+      { r: 2, c: 2, n: 6 },
+      { r: 3, c: 4, n: 5 },
+      { r: 3, c: 3, n: 3 },
+      { r: 4, c: 1, n: 4 },
+    ],
+    blocked: [3, 8],
     level: "medium",
     firstRule: "single",
   },
