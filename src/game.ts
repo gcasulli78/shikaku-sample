@@ -60,9 +60,13 @@ export class Game {
   helped = false;
   /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
   private pending: { rect: Rect; reason: Reason; stage: 1 | 2 } | undefined;
+  /** Caselle nere, una per cella (r * cols + c). */
+  private readonly black: Uint8Array;
 
   constructor(puzzle: Puzzle) {
     this.puzzle = puzzle;
+    this.black = new Uint8Array(puzzle.rows * puzzle.cols);
+    for (const idx of puzzle.blocked ?? []) this.black[idx] = 1;
   }
 
   /** Lo stato da salvare: rettangoli posati e suggerimenti usati (la cronologia di Annulla no). */
@@ -126,14 +130,14 @@ export class Game {
   }
 
   isBlocked(r: number, c: number): boolean {
-    return this.puzzle.blocked?.includes(r * this.puzzle.cols + c) ?? false;
+    return this.black[r * this.puzzle.cols + c] === 1;
   }
 
   /** Libero se non sovrappone nessun rettangolo già posato né caselle nere. */
   canPlace(rect: Rect): boolean {
     if (this.rects.some((other) => overlaps(other, rect))) return false;
-    const { cols } = this.puzzle;
-    return !this.puzzle.blocked?.some((idx) => contains(rect, Math.floor(idx / cols), idx % cols));
+    for (let r = rect.r; r < rect.r + rect.h; r++) for (let c = rect.c; c < rect.c + rect.w; c++) if (this.isBlocked(r, c)) return false;
+    return true;
   }
 
   /** Posa un rettangolo solo se non ne sovrappone altri; false se rifiutato. */
@@ -194,23 +198,28 @@ export class Game {
     const missing = this.puzzle.solution.find((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
     if (!missing) return undefined;
     this.helped = true;
-    const pending = this.pending ?? this.deduce();
-    if (!pending) {
-      this.hintsUsed++;
-      this.place(missing);
-      return { placed: missing };
+    if (!this.pending) {
+      const found = this.deduce();
+      if (!found) {
+        this.hintsUsed++;
+        this.place(missing);
+        return { placed: missing };
+      }
+      this.pending = { ...found, stage: 1 };
+      return { focus: found.reason };
     }
-    if (pending.stage < 2) {
-      this.pending = { ...pending, stage: (pending.stage + 1) as 1 | 2 };
-      return this.pending.stage === 1 ? { focus: pending.reason } : { explain: pending.reason };
+    const { rect, reason, stage } = this.pending;
+    if (stage === 1) {
+      this.pending = { rect, reason, stage: 2 };
+      return { explain: reason };
     }
     this.hintsUsed++;
-    this.place(pending.rect);
-    return { placed: pending.rect, reason: pending.reason };
+    this.place(rect);
+    return { placed: rect, reason };
   }
 
-  /** Il prossimo pezzo deducibile, non ancora mostrato (stage 0). */
-  private deduce(): { rect: Rect; reason: Reason; stage: 0 } | undefined {
+  /** Il prossimo pezzo deducibile, con il motivo. */
+  private deduce(): { rect: Rect; reason: Reason } | undefined {
     const found = nextDeduction(this.puzzle, this.rects);
     // Le deduzioni valgono per ogni soluzione: fuori dalla soluzione solo se non è unica.
     if (!found || !this.puzzle.solution.some((sol) => sameRect(sol, found.rect))) return undefined;
@@ -218,7 +227,7 @@ export class Game {
     const reason: Reason = { rule: found.rule, clue: clues[found.clue]! };
     if (found.cell !== undefined) reason.cell = this.cellAt(found.cell);
     if (found.by !== undefined) reason.by = clues[found.by]!;
-    return { rect: found.rect, reason, stage: 0 };
+    return { rect: found.rect, reason };
   }
 
   private cellAt(idx: number): { r: number; c: number } {

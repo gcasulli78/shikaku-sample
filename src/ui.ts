@@ -61,6 +61,11 @@ function variantLabel(v: Variant): string {
   return VARIANTS.find((x) => x.id === v)!.label;
 }
 
+/** " · Forme" dopo livello o griglia; niente per il Classico. */
+function variantSuffix(v: Variant): string {
+  return v !== "classic" ? ` · ${variantLabel(v)}` : "";
+}
+
 const SHAPE_LABELS: Record<Shape, string> = {
   square: "quadrato",
   oblong: "rettangolo non quadrato",
@@ -313,6 +318,10 @@ function gridArea(el: HTMLElement, rect: Rect): void {
   el.style.gridArea = `${rect.r + 1} / ${rect.c + 1} / span ${rect.h} / span ${rect.w}`;
 }
 
+function cellArea(el: HTMLElement, r: number, c: number): void {
+  gridArea(el, { r, c, h: 1, w: 1 });
+}
+
 export function startApp(): void {
   const settings = readJson(STORAGE_KEY, DEFAULT_SETTINGS);
   const board = $<HTMLDivElement>("board");
@@ -366,6 +375,11 @@ export function startApp(): void {
   let gameStatus = "";
   /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
   let notice: string | undefined;
+  /** Una mossa toglie il motivo del suggerimento e gli avvisi. */
+  const clearMessages = () => {
+    lastHint = undefined;
+    notice = undefined;
+  };
   const records = readJson<Records>(RECORDS_KEY, {});
   /** Il passo del tutorial in corso: la partita vera resta salvata e si riprende all'uscita. */
   let tutorialStep: number | undefined;
@@ -465,11 +479,6 @@ export function startApp(): void {
     return ready[key] ?? generateAsync(optionsFor(choice));
   };
 
-  const syncLegend = () => {
-    legend.hidden = variantSelect.value !== "shapes";
-  };
-  syncLegend();
-
   const setStatus = (html: string) => {
     statusEl.innerHTML = html;
   };
@@ -488,7 +497,6 @@ export function startApp(): void {
     settings.variant = variant;
     if (settings.sizeId === CUSTOM) settings.custom = size;
     writeJson(STORAGE_KEY, settings);
-    syncLegend();
 
     const id = ++request;
     newBtn.disabled = true;
@@ -510,12 +518,20 @@ export function startApp(): void {
     if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
     else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (puzzle.difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
-    startGame(puzzle, variant, note);
+    startGame(puzzle, variant, { note });
     prefetch(choice);
   };
 
-  /** Mette in gioco un puzzle: nuovo, da un link, o ripreso dal salvataggio (saved). */
-  const startGame = (puzzle: GenerateResult, variant: Variant, note: string, saved?: SavedState) => {
+  /**
+   * Mette in gioco un puzzle: nuovo, da un link, ripreso dal salvataggio (saved) o del
+   * tutorial (status: la riga di stato al posto di livello e griglia).
+   */
+  const startGame = (
+    puzzle: GenerateResult,
+    variant: Variant,
+    options: { note?: string; saved?: SavedState; status?: string } = {},
+  ) => {
+    const { note = "", saved } = options;
     request++; // una generazione ancora in corso non sostituisce questa partita
     newBtn.disabled = false;
     board.classList.remove("busy");
@@ -525,15 +541,14 @@ export function startApp(): void {
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.solution);
     solved = false;
-    lastHint = undefined;
-    notice = undefined;
+    clearMessages();
     timer.reset(saved?.elapsed ?? 0);
     legend.hidden = variant !== "shapes";
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
-    const variantNote = variant !== "classic" ? ` · ${variantLabel(variant)}` : "";
-    gameStatus = saved?.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`;
+    gameStatus =
+      options.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantSuffix(variant)}${note}`;
     save();
     render();
   };
@@ -627,7 +642,7 @@ export function startApp(): void {
     for (const spot of lastHint ? hintSpots(lastHint) : []) {
       const el = document.createElement("div");
       el.className = "hint-mark";
-      el.style.gridArea = `${spot.r + 1} / ${spot.c + 1}`;
+      cellArea(el, spot.r, spot.c);
       board.append(el);
     }
 
@@ -659,6 +674,11 @@ export function startApp(): void {
   };
   setInterval(renderTimer, 250);
 
+  const clearPreview = () => {
+    preview?.remove();
+    preview = undefined;
+  };
+
   const showPreview = (rect: Rect) => {
     if (!preview) {
       preview = document.createElement("div");
@@ -672,22 +692,22 @@ export function startApp(): void {
     preview.textContent = game.isValid(rect) ? `${label} ✓` : label;
   };
 
+  /** Dopo ogni cambiamento della griglia: vittoria, salvataggio, disegno. */
   const afterMove = () => {
-    if (game.isSolved() && tutorialStep !== undefined) {
+    if (game.isSolved()) {
       solved = true;
       timer.pause();
+    }
+    if (solved && tutorialStep !== undefined) {
       const last = tutorialStep === TUTORIAL.length - 1;
       tutorialDone.textContent = last ? "Risolto! Hai visto tutte le regole: buon divertimento." : "Risolto! Passa al prossimo.";
       tutorialDone.hidden = false;
       return render();
     }
-    if (game.isSolved()) {
-      solved = true;
-      timer.pause();
-      const variant = gameVariant !== "classic" ? ` · ${variantLabel(gameVariant)}` : "";
+    if (solved) {
       const time = timer.elapsed();
       winText.textContent =
-        `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(time)}` +
+        `${difficultyLabel(difficulty)}${variantSuffix(gameVariant)} · tempo ${formatTime(time)}` +
         (game.hintsUsed > 0
           ? ` · ${game.hintsUsed} suggeriment${game.hintsUsed === 1 ? "o" : "i"}`
           : game.helped
@@ -750,8 +770,7 @@ export function startApp(): void {
     else return render();
 
     firstInput();
-    lastHint = undefined;
-    notice = undefined;
+    clearMessages();
     afterMove();
   };
 
@@ -780,7 +799,7 @@ export function startApp(): void {
     cursor = [Math.min(cursor[0], rows - 1), Math.min(cursor[1], cols - 1)];
     cursorEl = document.createElement("div");
     cursorEl.className = "cursor";
-    cursorEl.style.gridArea = `${cursor[0] + 1} / ${cursor[1] + 1}`;
+    cellArea(cursorEl, ...cursor);
     board.append(cursorEl);
     if (anchor) showPreview(rectFromCorners(...anchor, ...cursor));
   };
@@ -823,52 +842,44 @@ export function startApp(): void {
       const rect = game.rectAt(...cursor);
       if (rect) {
         game.remove(rect);
-        lastHint = undefined;
-        notice = undefined;
+        clearMessages();
         afterMove();
       }
     } else return;
     e.preventDefault();
-    if (!anchor) {
-      preview?.remove();
-      preview = undefined;
-    }
+    if (!anchor) clearPreview();
     renderCursor();
     describeCursor();
   });
   board.addEventListener("blur", () => {
     anchor = undefined;
-    preview?.remove();
-    preview = undefined;
+    clearPreview();
   });
 
   // --- Azioni ---
+  // Anche Annulla può completare la griglia (rimettendo un pezzo tolto): passa da afterMove.
   const undo = () => {
     game.undo();
-    lastHint = undefined;
-    notice = undefined;
-    save();
-    render();
+    clearMessages();
+    afterMove();
   };
   undoBtn.addEventListener("click", undo);
   clearBtn.addEventListener("click", () => {
     game.clear();
-    lastHint = undefined;
-    notice = undefined;
-    save();
-    render();
+    clearMessages();
+    afterMove();
   });
   hintBtn.addEventListener("click", () => {
     firstInput();
+    clearMessages();
     lastHint = game.hint();
-    notice = undefined;
     afterMove();
   });
   checkBtn.addEventListener("click", () => {
     const wrong = game.check();
+    clearMessages();
     notice =
       wrong === 0 ? "Finora è tutto giusto." : wrong === 1 ? "C'è un rettangolo sbagliato." : `Ci sono ${wrong} rettangoli sbagliati.`;
-    lastHint = undefined;
     save();
     render();
   });
@@ -886,6 +897,7 @@ export function startApp(): void {
         // Condivisione annullata o non riuscita: si copia il link.
       }
     }
+    clearMessages();
     try {
       await navigator.clipboard.writeText(url);
       notice = "Link copiato: chi lo apre gioca questo stesso puzzle.";
@@ -918,8 +930,7 @@ export function startApp(): void {
       const body = table.createTBody();
       for (const { rows: r, cols: c, difficulty: d, variant: v, rec } of rows) {
         const tr = body.insertRow();
-        const variant = v !== "classic" ? ` · ${variantLabel(v)}` : "";
-        for (const text of [`${r}×${c} · ${difficultyLabel(d)}${variant}`, String(rec.wins), recordTime(rec.best), recordTime(rec.bestClean)]) {
+        for (const text of [`${r}×${c} · ${difficultyLabel(d)}${variantSuffix(v)}`, String(rec.wins), recordTime(rec.best), recordTime(rec.bestClean)]) {
           tr.insertCell().textContent = text;
         }
       }
@@ -959,8 +970,9 @@ export function startApp(): void {
     const step = TUTORIAL[index]!;
     tutorialStep = index;
     const { rows, cols, clues, blocked } = step;
-    startGame(completePuzzle(blocked ? { rows, cols, clues, blocked } : { rows, cols, clues })!, step.variant, "");
-    gameStatus = `Come si gioca · ${index + 1} di ${TUTORIAL.length}`;
+    startGame(completePuzzle({ rows, cols, clues, blocked })!, step.variant, {
+      status: `Come si gioca · ${index + 1} di ${TUTORIAL.length}`,
+    });
     tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
     tutorialTitle.textContent = step.title;
     tutorialText.textContent = step.text;
@@ -968,7 +980,6 @@ export function startApp(): void {
     tutorialPrev.disabled = index === 0;
     tutorialNext.textContent = index === TUTORIAL.length - 1 ? "Gioca" : "Avanti";
     tutorialPanel.hidden = false;
-    render();
   };
 
   /** Chiude il pannello del tutorial (senza toccare la partita in gioco). */
@@ -1001,7 +1012,7 @@ export function startApp(): void {
     if (!saved.puzzle || !saved.variant || !saved.game) return false;
     // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
     syncDifficulties();
-    startGame(saved.puzzle, saved.variant, "", saved);
+    startGame(saved.puzzle, saved.variant, { saved, status: saved.status });
     return true;
   }
 
@@ -1016,15 +1027,14 @@ export function startApp(): void {
     syncDifficulties();
     difficultySelect.value = puzzle.difficulty;
     variantSelect.value = variant;
-    syncLegend();
   };
 
   /**
-   * Apre il puzzle del link nell'indirizzo, se c'è; true se valido. L'indirizzo si ripulisce:
-   * ricaricando si riprende la partita salvata, non si riapre il link da capo.
+   * Apre il puzzle del link nell'indirizzo, se c'è ("none" se non c'è, "bad" se rovinato).
+   * L'indirizzo si ripulisce: ricaricando si riprende la partita salvata, non il link da capo.
    */
-  const openLink = (): boolean => {
-    if (!location.hash.startsWith(LINK_PREFIX)) return false;
+  const openLink = (): "ok" | "bad" | "none" => {
+    if (!location.hash.startsWith(LINK_PREFIX)) return "none";
     const linked = puzzleFromCode(location.hash.slice(LINK_PREFIX.length));
     try {
       history.replaceState(null, "", location.href.split("#")[0]);
@@ -1034,30 +1044,27 @@ export function startApp(): void {
     if (linked) {
       leaveTutorial();
       syncControls(linked.puzzle, linked.variant);
-      startGame(linked.puzzle, linked.variant, " · da un link");
-      return true;
+      startGame(linked.puzzle, linked.variant, { note: " · da un link" });
+      return "ok";
     }
-    if (game) {
-      notice = "Il link non contiene un puzzle valido.";
-      render();
-    }
-    return false;
+    return "bad";
   };
-  // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
-  addEventListener("hashchange", openLink);
-
-  const hadLink = location.hash.startsWith(LINK_PREFIX);
-  const linkOpened = openLink();
   const warnBadLink = () => {
-    if (!hadLink || !game) return;
+    if (!game) return;
     notice = "Il link non contiene un puzzle valido.";
     render();
   };
-  if (linkOpened) {
+  // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
+  addEventListener("hashchange", () => {
+    if (openLink() === "bad") warnBadLink();
+  });
+
+  const link = openLink();
+  if (link === "ok") {
     // Si gioca il puzzle del link.
   } else if (resume()) {
-    warnBadLink();
+    if (link === "bad") warnBadLink();
   } else {
-    void newGame().then(warnBadLink);
+    void newGame().then(() => link === "bad" && warnBadLink());
   }
 }

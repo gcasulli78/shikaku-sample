@@ -54,16 +54,23 @@ function place(s: State, i: number, cand: Candidate): void {
   });
 }
 
-function isContradiction(s: State, total: number): boolean {
+/** Perché uno stato è impossibile: un numero senza più forme, o una cella che nessuno copre. */
+export type Conflict = { kind: "starved"; clue: number } | { kind: "uncovered"; cell: number };
+
+function conflictIn(s: State, total: number): Conflict | undefined {
   const covered = new Uint8Array(total);
   for (let i = 0; i < s.cands.length; i++) {
     if (s.placed[i]) continue;
     const list = s.cands[i]!;
-    if (list.length === 0) return true;
+    if (list.length === 0) return { kind: "starved", clue: i };
     for (const cand of list) for (const idx of cand.cells) covered[idx] = 1;
   }
-  for (let idx = 0; idx < total; idx++) if (!s.occupied[idx] && !covered[idx]) return true;
-  return false;
+  for (let idx = 0; idx < total; idx++) if (!s.occupied[idx] && !covered[idx]) return { kind: "uncovered", cell: idx };
+  return undefined;
+}
+
+function isContradiction(s: State, total: number): boolean {
+  return conflictIn(s, total) !== undefined;
 }
 
 // --- Regole ---
@@ -336,20 +343,6 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduct
   }
 }
 
-/** Perché uno stato è impossibile: un numero senza più forme, o una cella che nessuno copre. */
-export type Conflict = { kind: "starved"; clue: number } | { kind: "uncovered"; cell: number };
-
-function conflictIn(s: State, total: number): Conflict | undefined {
-  const starved = s.cands.findIndex((list, i) => !s.placed[i] && list.length === 0);
-  if (starved >= 0) return { kind: "starved", clue: starved };
-  const covered = new Uint8Array(total);
-  s.cands.forEach((list, i) => {
-    if (!s.placed[i]) for (const cand of list) for (const idx of cand.cells) covered[idx] = 1;
-  });
-  const cell = covered.findIndex((c, idx) => !c && !s.occupied[idx]);
-  return cell >= 0 ? { kind: "uncovered", cell } : undefined;
-}
-
 /**
  * Perché rect (che rispetta il suo indizio) è sbagliato: posato sopra ai pezzi corretti
  * given, la contraddizione a cui si arriva subito, o con le regole fino a Difficile (la
@@ -357,12 +350,14 @@ function conflictIn(s: State, total: number): Conflict | undefined {
  */
 export function conflictOf(input: SolveInput, given: readonly Rect[], rect: Rect): Conflict | undefined {
   const total = input.rows * input.cols;
-  for (let maxLevel = -1; maxLevel <= 2; maxLevel++) {
-    const s = stateWith(input, given);
-    if (!placeRect(s, rect)) return undefined;
-    const contradiction =
-      maxLevel < 0 ? isContradiction(s, total) : propagate(s, total, maxLevel, DIFFICULTIES.map(() => 0), { done: 0 }) === "contradiction";
-    if (contradiction) return conflictIn(s, total);
+  const base = stateWith(input, given);
+  if (!placeRect(base, rect)) return undefined;
+  const immediate = conflictIn(base, total);
+  if (immediate) return immediate;
+  for (let maxLevel = 0; maxLevel <= 2; maxLevel++) {
+    // propagate modifica lo stato: ogni livello riparte da una copia.
+    const s = cloneState(base);
+    if (propagate(s, total, maxLevel, DIFFICULTIES.map(() => 0), { done: 0 }) === "contradiction") return conflictIn(s, total);
   }
   return undefined;
 }

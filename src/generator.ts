@@ -98,8 +98,8 @@ function pickWeighted<T>(rng: Rng, items: readonly T[], weight: (item: T) => num
 const WIDE_WEIGHT = 2;
 
 /**
- * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi, tranne le
- * caselle nere. `balanced`: tanti orizzontali quanti verticali (vedi layout).
+ * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi.
+ * `balanced`: tanti orizzontali quanti verticali (vedi layout).
  */
 export function partition(
   rows: number,
@@ -107,11 +107,9 @@ export function partition(
   rng: Rng,
   profile: Profile = PROFILES.medium,
   balanced = false,
-  blocked: readonly number[] = [],
 ): Rect[] {
   const maxArea = maxAreaFor(rows, cols, profile);
   const used = new Uint8Array(rows * cols);
-  for (const idx of blocked) used[idx] = 1;
   const rects: Rect[] = [];
   const shapeWeight = (o: Rect) =>
     Math.pow(area(o), profile.sizeExp) *
@@ -351,8 +349,8 @@ const SOLVE_BUDGET = 20_000;
  */
 export const BALANCED: Record<Difficulty, boolean> = { easy: true, medium: true, hard: true, expert: true, master: false };
 
-function layout(s: Setup, blocked: readonly number[]): Rect[] {
-  return partition(s.rows, s.cols, s.rng, s.profile, s.balanced, blocked);
+function layout(s: Setup): Rect[] {
+  return partition(s.rows, s.cols, s.rng, s.profile, s.balanced);
 }
 
 /** Dimensioni e caselle nere: tutto ciò che serve a solver e valutatore oltre agli indizi. */
@@ -367,8 +365,8 @@ type Board = Omit<SolveInput, "clues">;
 function generateUnique(s: Setup, maxAttempts: number, maxFixes: number) {
   let fallback: { board: Board; clues: Clue[]; solution: Rect[]; unique: boolean } | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Nel Classico e nelle Forme nessuna estrazione: stessa sequenza casuale di prima.
-    const { solution, blocked } = s.blackRate > 0 ? blackenSmall(s, layout(s, [])) : { solution: layout(s, []), blocked: [] };
+    // Senza caselle nere (quota 0) blackenSmall non estrae nulla: Classico e Forme restano come prima.
+    const { solution, blocked } = blackenSmall(s, layout(s));
     const board: Board = blocked.length > 0 ? { rows: s.rows, cols: s.cols, blocked } : { rows: s.rows, cols: s.cols };
     const clues = solution.map((rect) => placeClue(rect, s));
 
