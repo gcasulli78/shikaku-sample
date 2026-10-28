@@ -249,11 +249,14 @@ interface Setup {
   kinds: readonly number[];
   /** Probabilità di un indizio orientato (ORIENTED), 0 nel Classico. */
   oriented: number;
+  /** Partizione bilanciata tra orizzontali e verticali (BALANCED). */
+  balanced: boolean;
 }
 
 function placeClue(rect: Rect, s: Setup): Clue {
   const cell = pickCell(rect, s.rng, s.profile);
-  // Nel Classico niente estrazione del tipo: stessa sequenza casuale (e stessi puzzle per seed) di prima.
+  // Nel Classico niente estrazione del tipo: stessa sequenza casuale di prima (Maestro, con la
+  // partizione originale, genera gli stessi puzzle per seed).
   return dress(cell, rect, s.kinds === CLASSIC_KINDS ? "number" : pickKind(s), s);
 }
 
@@ -290,12 +293,15 @@ const SOLVE_BUDGET = 20_000;
 
 /**
  * Il riempimento riga per riga favorisce i rettangoli verticali (0.23 orizzontali per
- * verticale sul 15×15, e 4 puzzle su 5 quasi tutti verticali): dove l'orientamento si
- * vede negli indizi la partizione è bilanciata. Altrove (Classico, Maestro) resta com'era:
- * la bilanciata ha pezzi più piccoli e Maestro sul 15×15 scendeva a 10/16 (misurato).
+ * verticale sul 15×15, e 4 puzzle su 5 quasi tutti verticali): per livello, se la
+ * partizione è bilanciata (in entrambe le varianti). Maestro resta com'era: la bilanciata
+ * ha pezzi più piccoli e sul 15×15 scendeva a 10/16 nelle Forme e a 2/8 nel Classico
+ * (misurato); Esperto nel Classico regge (42/48 contro 39/48 su 15×15, 8×15, 10×10).
  */
+export const BALANCED: Record<Difficulty, boolean> = { easy: true, medium: true, hard: true, expert: true, master: false };
+
 function layout(s: Setup): Rect[] {
-  return partition(s.rows, s.cols, s.rng, s.profile, s.oriented > 0);
+  return partition(s.rows, s.cols, s.rng, s.profile, s.balanced);
 }
 
 /**
@@ -399,6 +405,7 @@ export function generate(options: GenerateOptions): GenerateResult {
     profile: PROFILES[target],
     kinds: options.variant === "shapes" ? SHAPE_KINDS[target] : CLASSIC_KINDS,
     oriented: options.variant === "shapes" ? ORIENTED[target] : 0,
+    balanced: BALANCED[target],
   };
   const deadline = options.timeLimitMs === undefined ? Infinity : Date.now() + options.timeLimitMs;
   const outOfTime = () => Date.now() > deadline;
