@@ -337,6 +337,7 @@ export function startApp(): void {
   const recordsBtn = $<HTMLButtonElement>("records-btn");
   const recordsDialog = $<HTMLDialogElement>("records");
   const recordsBody = $<HTMLDivElement>("records-body");
+  const srEl = $<HTMLParagraphElement>("sr");
 
   const timer = new Timer();
   const generateAsync = createGenerator();
@@ -626,6 +627,7 @@ export function startApp(): void {
       board.append(el);
     }
     board.classList.toggle("solved", solved);
+    renderCursor();
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
@@ -694,6 +696,11 @@ export function startApp(): void {
   let drag: { pointerId: number; start: [number, number]; end: [number, number] } | undefined;
 
   board.addEventListener("pointerdown", (e) => {
+    if (keyboard) {
+      keyboard = false;
+      anchor = undefined;
+      renderCursor();
+    }
     if (solved || drag || e.button !== 0) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
     drag = { pointerId: e.pointerId, start: cell, end: cell };
@@ -709,12 +716,8 @@ export function startApp(): void {
     showPreview(rectFromCorners(...drag.start, ...cell));
   });
 
-  const endDrag = (e: PointerEvent, commit: boolean) => {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    const { start, end } = drag;
-    drag = undefined;
-    if (!commit) return render();
-
+  /** Il rettangolo da start a end, disegnato col mouse, col dito o da tastiera. */
+  const commitRect = (start: [number, number], end: [number, number]) => {
     const rect = rectFromCorners(...start, ...end);
     const intent = game.intent(rect);
     // "blocked" e "none": la griglia non cambia, quindi né cronometro né suggerimento evidenziato.
@@ -727,8 +730,93 @@ export function startApp(): void {
     notice = undefined;
     afterMove();
   };
+
+  const endDrag = (e: PointerEvent, commit: boolean) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const { start, end } = drag;
+    drag = undefined;
+    if (commit) commitRect(start, end);
+    else render();
+  };
   board.addEventListener("pointerup", (e) => endDrag(e, true));
   board.addEventListener("pointercancel", (e) => endDrag(e, false));
+
+  // --- Tastiera: un cursore sulla griglia; Invio fissa un angolo e poi chiude il rettangolo ---
+  /** Il cursore si vede solo usando la tastiera, finché non si torna al mouse. */
+  let keyboard = false;
+  let cursor: [number, number] = [0, 0];
+  let anchor: [number, number] | undefined;
+  let cursorEl: HTMLDivElement | undefined;
+
+  const renderCursor = () => {
+    cursorEl?.remove();
+    cursorEl = undefined;
+    if (!keyboard || !game || solved) return;
+    const { rows, cols } = game.puzzle;
+    cursor = [Math.min(cursor[0], rows - 1), Math.min(cursor[1], cols - 1)];
+    cursorEl = document.createElement("div");
+    cursorEl.className = "cursor";
+    cursorEl.style.gridArea = `${cursor[0] + 1} / ${cursor[1] + 1}`;
+    board.append(cursorEl);
+    if (anchor) showPreview(rectFromCorners(...anchor, ...cursor));
+  };
+
+  /** Cosa c'è sotto il cursore, per i lettori di schermo. */
+  const describeCursor = () => {
+    const [r, c] = cursor;
+    const clue = game.puzzle.clues.find((cl) => cl.r === r && cl.c === c);
+    const rect = game.rectAt(r, c);
+    const parts = [`Riga ${r + 1}, colonna ${c + 1}`];
+    if (clue) parts.push(`indizio: ${clueLabel(clue)}`);
+    parts.push(rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
+    if (anchor) {
+      const sel = rectFromCorners(...anchor, ...cursor);
+      parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
+    }
+    srEl.textContent = parts.join(", ") + ".";
+  };
+
+  const MOVES: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+
+  board.addEventListener("keydown", (e) => {
+    if (!game || solved || e.ctrlKey || e.metaKey || e.altKey) return;
+    const move = MOVES[e.key];
+    if (move) {
+      const { rows, cols } = game.puzzle;
+      if (keyboard) cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
+      keyboard = true;
+    } else if (e.key === "Enter" || e.key === " ") {
+      keyboard = true;
+      if (anchor) {
+        const start = anchor;
+        anchor = undefined;
+        commitRect(start, cursor);
+      } else anchor = cursor;
+    } else if (e.key === "Escape" && anchor) {
+      anchor = undefined;
+      render();
+    } else if ((e.key === "Delete" || e.key === "Backspace") && keyboard) {
+      const rect = game.rectAt(...cursor);
+      if (rect) {
+        game.remove(rect);
+        lastHint = undefined;
+        notice = undefined;
+        afterMove();
+      }
+    } else return;
+    e.preventDefault();
+    if (!anchor) {
+      preview?.remove();
+      preview = undefined;
+    }
+    renderCursor();
+    describeCursor();
+  });
+  board.addEventListener("blur", () => {
+    anchor = undefined;
+    preview?.remove();
+    preview = undefined;
+  });
 
   // --- Azioni ---
   const undo = () => {
@@ -816,10 +904,13 @@ export function startApp(): void {
     recordsDialog.showModal();
   });
   document.addEventListener("keydown", (e) => {
-    if (!game || solved || e.target instanceof HTMLInputElement) return;
+    if (!game || solved || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
       undo();
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "h" && !document.querySelector("dialog[open]")) {
+      e.preventDefault();
+      hintBtn.click();
     }
   });
 

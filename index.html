@@ -49,9 +49,10 @@
       </section>
 
       <p class="status" id="status" aria-live="polite"></p>
+      <p class="sr-only" id="sr" aria-live="polite"></p>
 
       <div class="board-wrap">
-        <div class="board" id="board" role="grid" aria-label="Griglia di gioco"></div>
+        <div class="board" id="board" role="application" tabindex="0" aria-label="Griglia di gioco" aria-describedby="keys-help"></div>
       </div>
 
       <section class="actions" aria-label="Azioni">
@@ -76,6 +77,13 @@
         Il suggerimento toglie prima i rettangoli sbagliati spiegando perché, poi aiuta a gradi: l'indizio da guardare, il ragionamento, il pezzo.
         Verifica dice solo se ci sono errori.
       </p>
+      <details class="help keys">
+        <summary>Da tastiera</summary>
+        <span id="keys-help">
+          Frecce per muoversi sulla griglia, Invio per fissare un angolo e poi per posare il rettangolo, Esc per annullare,
+          Canc per togliere il rettangolo sotto il cursore, H per il suggerimento, Ctrl+Z per annullare.
+        </span>
+      </details>
     </main>
 
     <dialog id="win" aria-labelledby="win-title">
