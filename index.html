@@ -12,6 +12,9 @@
       <header class="top">
         <h1>Shikaku</h1>
         <span class="timer" id="timer" aria-label="Tempo">0:00</span>
+        <button type="button" class="icon-btn" id="records-btn" title="Record" aria-label="Record">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8M9 18h6"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="theme" title="Tema" aria-label="Cambia tema"></button>
       </header>
 
@@ -52,6 +55,7 @@
         <button type="button" class="btn" id="undo" title="Annulla (Ctrl+Z)" disabled>Annulla</button>
         <button type="button" class="btn" id="clear" disabled>Cancella</button>
         <button type="button" class="btn" id="hint" disabled>Suggerimento</button>
+        <button type="button" class="btn" id="share" disabled>Condividi</button>
       </section>
 
       <p class="help legend" id="legend" hidden>
@@ -73,9 +77,18 @@
     <dialog id="win" aria-labelledby="win-title">
       <h2 id="win-title">Risolto!</h2>
       <p id="win-text"></p>
+      <p class="record" id="win-record" hidden></p>
       <form method="dialog" class="dialog-actions">
         <button class="btn" value="close">Chiudi</button>
         <button class="btn primary" value="new">Nuova partita</button>
+      </form>
+    </dialog>
+
+    <dialog id="records" aria-labelledby="records-title">
+      <h2 id="records-title">Record</h2>
+      <div class="records-body" id="records-body"></div>
+      <form method="dialog" class="dialog-actions">
+        <button class="btn primary" value="close">Chiudi</button>
       </form>
     </dialog>
 

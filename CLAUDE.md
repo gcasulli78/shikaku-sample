@@ -55,6 +55,12 @@ Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) 
 - In `src/types.ts`: `MIN_SIDE` (Esperto da 7, Maestro da 8, sul lato minore) e `TIME_LIMITS`. Allo scadere del tempo si propone il puzzle più vicino, preferendo un livello sotto a uno sopra.
 - Esperto e Maestro: mentre si gioca, un secondo Worker prepara il puzzle successivo e lo salva in `localStorage` (`shikaku:ready`).
 
+## Partite salvate, record, link
+
+- `localStorage`: `shikaku:settings` (menu e tema), `shikaku:game` (partita in corso: puzzle, rettangoli, suggerimenti, tempo; si cancella alla vittoria; la cronologia di Annulla non si salva), `shikaku:records` (`records.ts`, chiave griglia:livello:variante, livello misurato).
+- All'avvio: puzzle del link (`#p=…`), altrimenti partita salvata, altrimenti una nuova. Riprendendo una partita i menu restano quelli delle impostazioni; con un link si allineano al puzzle.
+- Il link contiene gli **indizi** (`share.ts`, con numero di versione), non il seed: col tempo limite lo stesso seed può dare puzzle diversi su dispositivi diversi, e cambiare il generatore romperebbe i link. All'apertura soluzione e livello si ricalcolano con solver e valutatore; dopo l'apertura l'indirizzo si ripulisce. Funziona anche con `hashchange` (link incollato nella scheda aperta).
+
 Se si cambiano regole o profili, **prima misurare** su più seed e dimensioni (7×7, 8×8, 10×10, 15×15, una griglia rettangolare): quanti puzzle del livello giusto si trovano entro il tempo limite e quanto tempo serve. Le soglie attuali vengono da queste misure.
 
 ## Modo di lavorare

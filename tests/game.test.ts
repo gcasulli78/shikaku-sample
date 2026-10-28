@@ -163,6 +163,19 @@ describe("Game", () => {
     expect(game.hintsUsed).toBe(3);
   });
 
+  it("una partita salvata riprende rettangoli e suggerimenti, senza sovrapposizioni", () => {
+    const game = new Game(puzzle);
+    game.place({ r: 0, c: 0, h: 2, w: 1 });
+    game.hint();
+    const saved = JSON.parse(JSON.stringify(game.snapshot()));
+    const resumed = Game.restore(puzzle, saved);
+    expect(resumed.placed).toEqual(game.placed);
+    expect(resumed.hintsUsed).toBe(1);
+    expect(resumed.isSolved()).toBe(true);
+    const broken = Game.restore(puzzle, { rects: [{ r: 0, c: 0, h: 1, w: 2 }, { r: 0, c: 1, h: 2, w: 1 }], hintsUsed: 0 });
+    expect(broken.placed).toEqual([{ r: 0, c: 0, h: 1, w: 2 }]);
+  });
+
   it("vittoria solo con griglia completa e corretta", () => {
     const game = new Game(puzzle);
     expect(game.isSolved()).toBe(false);
@@ -219,6 +232,11 @@ describe("Timer", () => {
     timer.reset();
     expect(timer.elapsed()).toBe(0);
     expect(timer.running).toBe(false);
+    timer.reset(42_000); // partita ripresa
+    expect(timer.elapsed()).toBe(42_000);
+    timer.start();
+    now = 15000;
+    expect(timer.elapsed()).toBe(45_000);
   });
 
   it("formatta mm:ss", () => {

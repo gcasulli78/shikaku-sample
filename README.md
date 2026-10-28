@@ -22,11 +22,21 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 | `src/generator.ts` | Partizione casuale + numeri; soluzione unica; profili e raffinamento per raggiungere la difficoltà chiesta |
 | `src/solver.ts` | Conta le soluzioni con backtracking (si ferma a 2) |
 | `src/grader.ts` | Misura la difficoltà risolvendo "come una persona" con regole graduate; trova la prossima deduzione per i suggerimenti |
+| `src/share.ts` | Puzzle nel link: codifica degli indizi, soluzione e livello ricostruiti all'apertura |
+| `src/records.ts` | Record personali per griglia, livello e variante |
 | `src/worker.ts` | Genera i puzzle in un Web Worker, senza bloccare la pagina |
 | `src/game.ts` | Stato partita: posa/rimozione, annulla, suggerimenti (con il motivo), vittoria, cronometro |
 | `src/ui.ts` | Rendering, input mouse/touch, tema, impostazioni salvate |
 
 La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il DOM ed è coperta dai test in `tests/`.
+
+## Partite, record e link
+
+- La partita in corso si salva nel browser a ogni mossa: riaprendo la pagina si riprende da lì, con il tempo trascorso.
+- Record personali (pulsante con la coppa): partite vinte, tempo migliore e tempo migliore senza aiuti, per griglia, livello e variante.
+- **Condividi** copia un link (sul telefono apre il menu di condivisione): chi lo apre gioca lo stesso puzzle. Il link contiene gli indizi, non il seed, quindi non dipende dalla velocità del dispositivo né dalle versioni del generatore.
+
+Tutto resta nel browser (`localStorage`): niente server, niente account.
 
 ## Varianti
 

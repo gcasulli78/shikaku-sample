@@ -1,11 +1,14 @@
-import { formatTime, Game, Timer, type Hint, type Reason } from "./game";
+import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
+import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
+import { encodePuzzle, puzzleFromCode } from "./share";
 import {
   area,
   availableDifficulties,
   clampSize,
   DIFFICULTIES,
   difficultyLabel,
+  difficultyLevel,
   MAX_SIZE,
   MIN_SIZE,
   minSide,
@@ -25,6 +28,10 @@ import GeneratorWorker from "./worker?worker&inline";
 
 const STORAGE_KEY = "shikaku:settings";
 const READY_KEY = "shikaku:ready";
+const GAME_KEY = "shikaku:game";
+const RECORDS_KEY = "shikaku:records";
+/** Il puzzle nel link: indirizzo#p=codice (vedi share.ts). */
+const LINK_PREFIX = "#p=";
 const CUSTOM = "custom";
 
 /** Livelli lenti da generare: mentre si gioca se ne prepara già il prossimo. */
@@ -167,6 +174,14 @@ function readJson<T extends object>(key: string, defaults: T): T {
   }
 }
 
+function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Come sotto: senza storage non c'è niente da togliere.
+  }
+}
+
 function writeJson(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -184,6 +199,15 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 type Ready = Record<string, GenerateResult>;
+
+/** La partita in corso, salvata a ogni mossa per riprenderla riaprendo la pagina. */
+interface SavedState {
+  puzzle?: GenerateResult;
+  variant?: Variant;
+  game?: SavedGame;
+  elapsed?: number;
+  status?: string;
+}
 
 function $<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -255,6 +279,11 @@ export function startApp(): void {
   const hintBtn = $<HTMLButtonElement>("hint");
   const winDialog = $<HTMLDialogElement>("win");
   const winText = $<HTMLParagraphElement>("win-text");
+  const winRecord = $<HTMLParagraphElement>("win-record");
+  const shareBtn = $<HTMLButtonElement>("share");
+  const recordsBtn = $<HTMLButtonElement>("records-btn");
+  const recordsDialog = $<HTMLDialogElement>("records");
+  const recordsBody = $<HTMLDivElement>("records-body");
 
   const timer = new Timer();
   const generateAsync = createGenerator();
@@ -271,6 +300,9 @@ export function startApp(): void {
   let lastHint: Hint | undefined;
   /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
   let gameStatus = "";
+  /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
+  let notice: string | undefined;
+  const records = readJson<Records>(RECORDS_KEY, {});
   let request = 0;
 
   // --- Tema ---
@@ -407,29 +439,48 @@ export function startApp(): void {
       delete ready[key];
       writeJson(READY_KEY, ready);
     }
+    let note = "";
+    if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
+    else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
+    else if (puzzle.difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
+    startGame(puzzle, variant, note);
+    prefetch(choice);
+  };
+
+  /** Mette in gioco un puzzle: nuovo, da un link, o ripreso dal salvataggio (saved). */
+  const startGame = (puzzle: GenerateResult, variant: Variant, note: string, saved?: SavedState) => {
+    request++; // una generazione ancora in corso non sostituisce questa partita
     newBtn.disabled = false;
     board.classList.remove("busy");
-
     const { rows, cols } = puzzle;
-    game = new Game(puzzle);
+    game = saved?.game ? Game.restore(puzzle, saved.game) : new Game(puzzle);
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.solution);
     solved = false;
     lastHint = undefined;
-    timer.reset();
+    notice = undefined;
+    timer.reset(saved?.elapsed ?? 0);
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
-
-    let note = "";
-    if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
-    else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
-    else if (difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
     const variantNote = variant === "shapes" ? ` · ${variantLabel(variant)}` : "";
-    gameStatus = `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`;
+    gameStatus = saved?.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`;
+    save();
     render();
-    prefetch(choice);
+  };
+
+  /** Salva la partita in corso; una partita vinta non si riprende. */
+  const save = () => {
+    if (solved) return removeKey(GAME_KEY);
+    const state: SavedState = {
+      puzzle: game.puzzle as GenerateResult,
+      variant: gameVariant,
+      game: game.snapshot(),
+      elapsed: timer.elapsed(),
+      status: gameStatus,
+    };
+    writeJson(GAME_KEY, state);
   };
 
   sizeSelect.addEventListener("change", () => {
@@ -458,7 +509,8 @@ export function startApp(): void {
     const { rows, cols, clues } = game.puzzle;
     board.replaceChildren();
     preview = undefined;
-    if (lastHint) statusEl.textContent = hintText(lastHint);
+    if (notice) statusEl.textContent = notice;
+    else if (lastHint) statusEl.textContent = hintText(lastHint);
     else setStatus(gameStatus);
 
     // Linee della griglia sotto i rettangoli, numeri sopra.
@@ -520,6 +572,7 @@ export function startApp(): void {
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
     hintBtn.disabled = solved;
+    shareBtn.disabled = false;
     renderTimer();
   };
 
@@ -546,10 +599,17 @@ export function startApp(): void {
       solved = true;
       timer.pause();
       const variant = gameVariant === "shapes" ? ` · ${variantLabel(gameVariant)}` : "";
+      const time = timer.elapsed();
       winText.textContent =
-        `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(timer.elapsed())}` +
+        `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(time)}` +
         (game.hintsUsed > 0 ? ` · ${game.hintsUsed} suggeriment${game.hintsUsed === 1 ? "o" : "i"}` : " · senza suggerimenti");
+      const { rows, cols } = game.puzzle;
+      const { best, bestClean } = recordWin(records, recordKey({ rows, cols, difficulty, variant: gameVariant }), time, game.hintsUsed === 0);
+      writeJson(RECORDS_KEY, records);
+      winRecord.hidden = !best && !bestClean;
+      winRecord.textContent = bestClean && !best ? "Nuovo record senza aiuti!" : "Nuovo record!";
     }
+    save();
     render();
     if (solved) winDialog.showModal();
   };
@@ -600,6 +660,7 @@ export function startApp(): void {
 
     firstInput();
     lastHint = undefined;
+    notice = undefined;
     afterMove();
   };
   board.addEventListener("pointerup", (e) => endDrag(e, true));
@@ -609,18 +670,78 @@ export function startApp(): void {
   const undo = () => {
     game.undo();
     lastHint = undefined;
+    notice = undefined;
+    save();
     render();
   };
   undoBtn.addEventListener("click", undo);
   clearBtn.addEventListener("click", () => {
     game.clear();
     lastHint = undefined;
+    notice = undefined;
+    save();
     render();
   });
   hintBtn.addEventListener("click", () => {
     firstInput();
     lastHint = game.hint();
+    notice = undefined;
     afterMove();
+  });
+
+  // --- Condividere ---
+  shareBtn.addEventListener("click", async () => {
+    const { rows, cols, clues } = game.puzzle;
+    const url = location.href.split("#")[0] + LINK_PREFIX + encodePuzzle({ rows, cols, clues, variant: gameVariant });
+    // Sul telefono il menu di condivisione, sul computer il link copiato.
+    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+      try {
+        await navigator.share({ title: `Shikaku ${rows}×${cols} · ${difficultyLabel(difficulty)}`, url });
+        return;
+      } catch {
+        // Condivisione annullata o non riuscita: si copia il link.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      notice = "Link copiato: chi lo apre gioca questo stesso puzzle.";
+    } catch {
+      notice = `Link: ${url}`;
+    }
+    render();
+  });
+
+  // --- Record ---
+  const recordTime = (ms: number | undefined) => (ms === undefined ? "—" : formatTime(ms));
+  recordsBtn.addEventListener("click", () => {
+    const rows = Object.entries(records)
+      .flatMap(([key, rec]) => {
+        const parsed = parseRecordKey(key);
+        return parsed ? [{ ...parsed, rec }] : [];
+      })
+      .sort(
+        (a, b) =>
+          a.variant.localeCompare(b.variant) ||
+          a.rows * a.cols - b.rows * b.cols ||
+          a.rows - b.rows ||
+          difficultyLevel(a.difficulty) - difficultyLevel(b.difficulty),
+      );
+    if (rows.length === 0) {
+      recordsBody.textContent = "Ancora nessuna partita vinta.";
+    } else {
+      const table = document.createElement("table");
+      table.innerHTML = "<thead><tr><th>Partita</th><th>Vinte</th><th>Migliore</th><th>Senza aiuti</th></tr></thead>";
+      const body = table.createTBody();
+      for (const { rows: r, cols: c, difficulty: d, variant: v, rec } of rows) {
+        const tr = body.insertRow();
+        const variant = v === "shapes" ? ` · ${variantLabel(v)}` : "";
+        for (const text of [`${r}×${c} · ${difficultyLabel(d)}${variant}`, String(rec.wins), recordTime(rec.best), recordTime(rec.bestClean)]) {
+          tr.insertCell().textContent = text;
+        }
+      }
+      recordsBody.replaceChildren(table);
+    }
+    recordsDialog.showModal();
   });
   document.addEventListener("keydown", (e) => {
     if (!game || solved || e.target instanceof HTMLInputElement) return;
@@ -635,10 +756,73 @@ export function startApp(): void {
   });
 
   // Il cronometro si ferma con la scheda nascosta e riparte al ritorno.
+  // Nascondendo la scheda si salva anche il tempo trascorso.
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) timer.pause();
-    else if (!solved && timer.elapsed() > 0) timer.start();
+    if (document.hidden) {
+      timer.pause();
+      if (game) save();
+    } else if (!solved && timer.elapsed() > 0) timer.start();
+  });
+  addEventListener("pagehide", () => {
+    if (game) save();
   });
 
-  void newGame();
+  // --- Avvio: un puzzle dal link, altrimenti la partita salvata, altrimenti una nuova ---
+  /** Allinea i menu al puzzle di un link, così "Nuova partita" ne propone uno simile. */
+  const syncControls = (puzzle: GenerateResult, variant: Variant) => {
+    const preset = PRESETS.find((p) => p.size.rows === puzzle.rows && p.size.cols === puzzle.cols);
+    sizeSelect.value = preset?.id ?? CUSTOM;
+    rowsInput.value = String(puzzle.rows);
+    colsInput.value = String(puzzle.cols);
+    syncCustom();
+    syncDifficulties();
+    difficultySelect.value = puzzle.difficulty;
+    variantSelect.value = variant;
+    syncLegend();
+  };
+
+  /**
+   * Apre il puzzle del link nell'indirizzo, se c'è; true se valido. L'indirizzo si ripulisce:
+   * ricaricando si riprende la partita salvata, non si riapre il link da capo.
+   */
+  const openLink = (): boolean => {
+    if (!location.hash.startsWith(LINK_PREFIX)) return false;
+    const linked = puzzleFromCode(location.hash.slice(LINK_PREFIX.length));
+    try {
+      history.replaceState(null, "", location.href.split("#")[0]);
+    } catch {
+      // Alcuni browser con file://: l'indirizzo resta col link.
+    }
+    if (linked) {
+      syncControls(linked.puzzle, linked.variant);
+      startGame(linked.puzzle, linked.variant, " · da un link");
+      return true;
+    }
+    if (game) {
+      notice = "Il link non contiene un puzzle valido.";
+      render();
+    }
+    return false;
+  };
+  // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
+  addEventListener("hashchange", openLink);
+
+  const saved = readJson<SavedState>(GAME_KEY, {});
+  const hadLink = location.hash.startsWith(LINK_PREFIX);
+  const linkOpened = openLink();
+  const warnBadLink = () => {
+    if (!hadLink || !game) return;
+    notice = "Il link non contiene un puzzle valido.";
+    render();
+  };
+  if (linkOpened) {
+    // Si gioca il puzzle del link.
+  } else if (saved.puzzle && saved.variant && saved.game) {
+    // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
+    syncDifficulties();
+    startGame(saved.puzzle, saved.variant, "", saved);
+    warnBadLink();
+  } else {
+    void newGame().then(warnBadLink);
+  }
 }

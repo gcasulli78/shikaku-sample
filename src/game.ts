@@ -24,6 +24,11 @@ export interface Reason {
  */
 export type Hint = { removed: Rect[] } | { placed: Rect; reason?: Reason };
 
+export interface SavedGame {
+  rects: Rect[];
+  hintsUsed: number;
+}
+
 export class Game {
   readonly puzzle: Puzzle;
   private rects: Rect[] = [];
@@ -32,6 +37,19 @@ export class Game {
 
   constructor(puzzle: Puzzle) {
     this.puzzle = puzzle;
+  }
+
+  /** Lo stato da salvare: rettangoli posati e suggerimenti usati (la cronologia di Annulla no). */
+  snapshot(): SavedGame {
+    return { rects: this.rects.map((rect) => ({ ...rect })), hintsUsed: this.hintsUsed };
+  }
+
+  /** Riprende una partita salvata; i rettangoli che si sovrappongono si scartano. */
+  static restore(puzzle: Puzzle, saved: SavedGame): Game {
+    const game = new Game(puzzle);
+    for (const rect of saved.rects) if (game.canPlace(rect)) game.rects.push({ ...rect });
+    game.hintsUsed = saved.hintsUsed;
+    return game;
   }
 
   get placed(): readonly Rect[] {
@@ -177,8 +195,9 @@ export class Timer {
     this.startedAt = undefined;
   }
 
-  reset(): void {
-    this.elapsedBefore = 0;
+  /** Azzera, o riparte da un tempo già trascorso (partita ripresa). */
+  reset(elapsed = 0): void {
+    this.elapsedBefore = elapsed;
     this.startedAt = undefined;
   }
 

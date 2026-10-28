@@ -515,6 +515,46 @@ dialog h2 {
   margin: 0 0 8px;
 }
 
+.record {
+  margin: 4px 0 0;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+dialog#records {
+  max-width: min(94vw, 460px);
+}
+
+.records-body {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.records-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.records-body th,
+.records-body td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.records-body th:first-child,
+.records-body td:first-child {
+  text-align: left;
+}
+
+.records-body th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .dialog-actions {
   display: flex;
   justify-content: center;
