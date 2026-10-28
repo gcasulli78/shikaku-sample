@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
-import { grade } from "../src/grader";
-import { availableDifficulties, sameRect, type Clue, type Difficulty } from "../src/types";
+import { grade, nextDeduction, type Rule } from "../src/grader";
+import { availableDifficulties, sameRect, type Clue, type Difficulty, type Rect, type Variant } from "../src/types";
 
 /** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
 function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
@@ -61,6 +61,71 @@ describe("grade", () => {
       expect(grade(p, 3).solved, `seed ${seed}`).toBe(false);
     }
   }, 120_000);
+});
+
+describe("nextDeduction", () => {
+  it("forma unica", () => {
+    // Il 2 non può scendere (c'è il 4): ha una sola forma già all'inizio.
+    expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 1, w: 2 }, rule: "single" });
+  });
+
+  it("riparte dai pezzi già posati", () => {
+    const input = parse(["2.", "4.", ".."]);
+    expect(nextDeduction(input, [{ r: 0, c: 0, h: 1, w: 2 }])).toMatchObject({ clue: 1, rect: { r: 1, c: 0, h: 2, w: 2 } });
+    expect(nextDeduction(input, [{ r: 0, c: 0, h: 1, w: 2 }, { r: 1, c: 0, h: 2, w: 2 }])).toBeUndefined();
+  });
+
+  it("casella che può coprire un solo indizio", () => {
+    // La seconda casella in alto la raggiunge solo il 6, a cui resta il 2×3 in alto a destra.
+    expect(nextDeduction(parse(["...6", "2...", ".4.."]), [])).toMatchObject({
+      clue: 0,
+      rect: { r: 0, c: 1, h: 2, w: 3 },
+      rule: "owner",
+      cell: 1,
+    });
+  });
+
+  it("celle sicure di un altro indizio", () => {
+    // Le caselle che il 4 copre comunque tolgono spazio al 3 in alto a destra: resta orizzontale.
+    expect(nextDeduction(parse(["3..3", ".2..", "..4."]), [])).toMatchObject({
+      clue: 1,
+      rect: { r: 0, c: 1, h: 1, w: 3 },
+      rule: "sure",
+      by: 3,
+    });
+  });
+
+  it("forme che lascerebbero buchi", () => {
+    expect(nextDeduction(parse(["..3.", "3..4", "....", ".42."]), [])).toMatchObject({
+      clue: 3,
+      rect: { r: 2, c: 0, h: 2, w: 2 },
+      rule: "hole",
+    });
+  });
+
+  it("deduzione dopo deduzione si arriva alla soluzione (puzzle generati)", () => {
+    const seen = new Set<Rule>();
+    const cases: [number, Difficulty, Variant][] = [
+      [8, "easy", "classic"],
+      [8, "hard", "classic"],
+      [8, "expert", "classic"],
+      [8, "hard", "shapes"],
+      [8, "expert", "shapes"],
+    ];
+    for (const [size, difficulty, variant] of cases) {
+      for (let seed = 1; seed <= 3; seed++) {
+        const p = generate({ rows: size, cols: size, difficulty, variant, seed });
+        const given: Rect[] = [];
+        for (let d = nextDeduction(p, given); d; d = nextDeduction(p, given)) {
+          expect(p.solution.some((sol) => sameRect(sol, d!.rect)), `${difficulty} ${variant} seed ${seed}`).toBe(true);
+          seen.add(d.rule);
+          given.push(d.rect);
+        }
+        expect(given, `${difficulty} ${variant} seed ${seed}`).toHaveLength(p.solution.length);
+      }
+    }
+    expect([...seen].sort()).toEqual(expect.arrayContaining(["guess", "hole", "owner", "single", "sure"]));
+  }, 60_000);
 });
 
 describe("availableDifficulties", () => {

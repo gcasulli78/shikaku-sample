@@ -25,6 +25,7 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 - I rettangoli non si sovrappongono: un trascinamento sopra un'area esistente mostra l'anteprima rossa e al rilascio viene rifiutato.
 - Click singolo: su un rettangolo lo toglie; su una casella libera crea un 1×1 solo se lì c'è il numero 1, altrimenti non fa niente.
 - Suggerimento: se ci sono rettangoli sbagliati (diversi dalla soluzione) li toglie tutti senza posarne; solo quando non ce ne sono posa un pezzo corretto.
+- Il pezzo suggerito non viene dalla soluzione ma da una deduzione: `nextDeduction` (`grader.ts`) parte dai pezzi posati e applica le regole del valutatore in ordine di costo fino al primo indizio con una sola forma; la riga di stato dice il motivo (forma unica, casella che può coprire solo quell'indizio, celle sicure di un altro indizio, buchi, ipotesi) e l'indizio o la casella decisiva lampeggiano. Solo se le regole non bastano si posa un pezzo della soluzione, senza motivo.
 
 ## Variante Forme
 

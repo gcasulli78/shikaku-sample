@@ -144,13 +144,20 @@ describe("Game", () => {
     expect(game.placed).toHaveLength(3);
   });
 
-  it("senza errori il suggerimento posa un pezzo della soluzione", () => {
+  it("senza errori il suggerimento posa il pezzo a cui si arriva ragionando, con il motivo", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 1, w: 3 }); // sbagliato, copre entrambe le soluzioni
     expect(game.hint()).toEqual({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
     expect(game.placed).toHaveLength(0);
-    expect(game.hint()).toEqual({ placed: { r: 0, c: 0, h: 2, w: 1 } });
-    expect(game.hint()).toEqual({ placed: { r: 0, c: 1, h: 2, w: 2 } });
+    // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
+    expect(game.hint()).toEqual({
+      placed: { r: 0, c: 1, h: 2, w: 2 },
+      reason: { rule: "single", clue: { r: 1, c: 2, n: 4 } },
+    });
+    expect(game.hint()).toEqual({
+      placed: { r: 0, c: 0, h: 2, w: 1 },
+      reason: { rule: "single", clue: { r: 0, c: 0, n: 2 } },
+    });
     expect(game.hintsUsed).toBe(3);
     expect(game.hint()).toBeUndefined();
     expect(game.hintsUsed).toBe(3);
@@ -170,10 +177,30 @@ describe("Game", () => {
     expect(game.isSolved()).toBe(true);
   });
 
-  it("risolvere a suon di suggerimenti vince sempre", () => {
-    const game = new Game(generate({ rows: 10, cols: 10, seed: 7 }));
-    while (game.hint());
-    expect(game.isSolved()).toBe(true);
+  it("risolvere a suon di suggerimenti vince sempre, ogni volta per deduzione", () => {
+    for (const variant of ["classic", "shapes"] as const) {
+      const game = new Game(generate({ rows: 10, cols: 10, seed: 7, variant }));
+      for (let hint = game.hint(); hint; hint = game.hint()) expect("reason" in hint && hint.reason, variant).toBeTruthy();
+      expect(game.isSolved()).toBe(true);
+    }
+  });
+
+  it("senza deduzioni possibili il suggerimento posa un pezzo della soluzione, senza motivo", () => {
+    //  2 .      ambiguo: il 2 in orizzontale o in verticale
+    //  . 2
+    const ambiguous: Puzzle = {
+      rows: 2,
+      cols: 2,
+      clues: [
+        { r: 0, c: 0, n: 2 },
+        { r: 1, c: 1, n: 2 },
+      ],
+      solution: [
+        { r: 0, c: 0, h: 1, w: 2 },
+        { r: 1, c: 0, h: 1, w: 2 },
+      ],
+    };
+    expect(new Game(ambiguous).hint()).toEqual({ placed: { r: 0, c: 0, h: 1, w: 2 } });
   });
 });
 

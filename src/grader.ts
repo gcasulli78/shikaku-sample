@@ -1,5 +1,5 @@
 import { candidatesFor, clueIndexMap, type Candidate, type SolveInput } from "./solver";
-import { DIFFICULTIES, type Difficulty, type Rect } from "./types";
+import { DIFFICULTIES, sameRect, type Difficulty, type Rect } from "./types";
 
 /**
  * Valuta la difficoltà risolvendo come farebbe una persona: regole in ordine di costo,
@@ -78,7 +78,8 @@ function ruleSingle(s: State): Outcome {
   return "none";
 }
 
-function ruleCellOwner(s: State, total: number): Outcome {
+/** notes (facoltativo): per ogni numero ristretto, la cella che solo lui può coprire. */
+function ruleCellOwner(s: State, total: number, notes?: Map<number, number>): Outcome {
   const owners: number[][] = Array.from({ length: total }, () => []);
   s.cands.forEach((list, i) => {
     if (s.placed[i]) return;
@@ -97,13 +98,15 @@ function ruleCellOwner(s: State, total: number): Outcome {
     const kept = list.filter((cand) => cand.cells.includes(idx));
     if (kept.length < list.length) {
       s.cands[i] = kept;
+      notes?.set(i, idx);
       outcome = "progress";
     }
   }
   return outcome;
 }
 
-function ruleSureCells(s: State): Outcome {
+/** notes (facoltativo): per ogni numero ristretto, il numero le cui celle sicure lo hanno ristretto. */
+function ruleSureCells(s: State, notes?: Map<number, number>): Outcome {
   let outcome: Outcome = "none";
   for (let i = 0; i < s.cands.length; i++) {
     if (s.placed[i]) continue;
@@ -116,6 +119,7 @@ function ruleSureCells(s: State): Outcome {
       const kept = list.filter((cand) => !overlapsCells(cand, sure));
       if (kept.length < list.length) {
         s.cands[j] = kept;
+        notes?.set(j, i);
         outcome = "progress";
       }
     });
@@ -230,15 +234,19 @@ function ruleGuess(s: State, total: number, guess: { options: number; level: num
   return "none";
 }
 
+function initialState(input: SolveInput): State {
+  const clueAt = clueIndexMap(input);
+  return {
+    cands: input.clues.map((_, i) => candidatesFor(input, i, clueAt)),
+    placed: input.clues.map(() => undefined),
+    occupied: new Uint8Array(input.rows * input.cols),
+  };
+}
+
 /** maxLevel limita le regole usate: oltre, il puzzle risulta non risolto. */
 export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): GradeResult {
   const total = input.rows * input.cols;
-  const clueAt = clueIndexMap(input);
-  const state: State = {
-    cands: input.clues.map((_, i) => candidatesFor(input, i, clueAt)),
-    placed: input.clues.map(() => undefined),
-    occupied: new Uint8Array(total),
-  };
+  const state = initialState(input);
   const steps = DIFFICULTIES.map(() => 0);
   const work: Work = { done: 0 };
   const result = propagate(state, total, maxLevel, steps, work);
@@ -250,4 +258,66 @@ export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): Gr
     placed: state.placed,
     work: work.done,
   };
+}
+
+/**
+ * Perché un numero ha una sola forma: "single" se l'aveva già (dati i pezzi posati),
+ * altrimenti l'ultima regola che gli ha tolto forme.
+ */
+export type Rule = "single" | "owner" | "sure" | "hole" | "guess" | "deep";
+
+export interface Deduction {
+  /** Indice del numero e la sua forma, ormai obbligata. */
+  clue: number;
+  rect: Rect;
+  rule: Rule;
+  /** owner: la cella che solo questo numero può coprire. */
+  cell?: number;
+  /** sure: il numero le cui celle sicure hanno tolto spazio. */
+  by?: number;
+}
+
+/**
+ * Il prossimo pezzo a cui si arriva ragionando, partendo dai pezzi già posati (che devono
+ * essere corretti): stesse regole di grade, in ordine di costo, fino al primo numero che
+ * resta con una sola forma. undefined se le regole non bastano.
+ */
+export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduction | undefined {
+  const total = input.rows * input.cols;
+  const s = initialState(input);
+  for (const rect of given) {
+    const i = s.cands.findIndex((list, j) => !s.placed[j] && list.some((cand) => sameRect(cand.rect, rect)));
+    if (i >= 0) place(s, i, s.cands[i]!.find((cand) => sameRect(cand.rect, rect))!);
+  }
+  const why = new Map<number, Omit<Deduction, "clue" | "rect">>();
+  const cells = new Map<number, number>();
+  const by = new Map<number, number>();
+  const work: Work = { done: 0 };
+  const rules: [Rule, () => Outcome][] = [
+    ["owner", () => ruleCellOwner(s, total, cells)],
+    ["sure", () => ruleSureCells(s, by)],
+    ["hole", () => ruleNoHole(s, total)],
+    ["guess", () => ruleGuess(s, total, GUESS, work)],
+    ["deep", () => ruleGuess(s, total, DEEP_GUESS, work)],
+  ];
+  for (;;) {
+    if (++work.done > WORK_BUDGET || isContradiction(s, total)) return undefined;
+    const i = s.cands.findIndex((list, j) => !s.placed[j] && list.length === 1);
+    if (i >= 0) return { clue: i, rect: s.cands[i]![0]!.rect, ...(why.get(i) ?? { rule: "single" }) };
+    let progress = false;
+    for (const [rule, run] of rules) {
+      const before = s.cands.map((list) => list.length);
+      cells.clear();
+      by.clear();
+      const outcome = run();
+      if (outcome === "contradiction") return undefined;
+      if (outcome === "none") continue;
+      s.cands.forEach((list, j) => {
+        if (list.length < before[j]!) why.set(j, { rule, cell: cells.get(j), by: by.get(j) });
+      });
+      progress = true;
+      break;
+    }
+    if (!progress) return undefined;
+  }
 }

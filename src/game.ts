@@ -1,3 +1,4 @@
+import { nextDeduction, type Rule } from "./grader";
 import { area, contains, fits, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
 
 /** Un'azione annullabile: rettangoli tolti e aggiunti insieme. */
@@ -6,8 +7,22 @@ interface Action {
   added: Rect[];
 }
 
-/** Esito di un suggerimento: rettangoli sbagliati tolti oppure un pezzo corretto posato. */
-export type Hint = { removed: Rect[] } | { placed: Rect };
+/**
+ * Perché il pezzo suggerito è obbligato (vedi Rule in grader.ts): l'indizio, e se c'è
+ * la casella che solo lui può coprire o l'indizio che gli ha tolto spazio.
+ */
+export interface Reason {
+  rule: Rule;
+  clue: Clue;
+  cell?: { r: number; c: number };
+  by?: Clue;
+}
+
+/**
+ * Esito di un suggerimento: rettangoli sbagliati tolti oppure un pezzo corretto posato,
+ * con il motivo (senza motivo se le regole del valutatore non bastavano).
+ */
+export type Hint = { removed: Rect[] } | { placed: Rect; reason?: Reason };
 
 export class Game {
   readonly puzzle: Puzzle;
@@ -99,8 +114,10 @@ export class Game {
   }
 
   /**
-   * Prima toglie tutti i rettangoli sbagliati; solo se non ce ne sono posa un pezzo
-   * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
+   * Prima toglie tutti i rettangoli sbagliati; solo se non ce ne sono posa il prossimo
+   * pezzo a cui si arriva ragionando dai pezzi posati (nextDeduction), o se le regole non
+   * bastano un pezzo mancante della soluzione (che a quel punto è sempre libero).
+   * undefined se è già risolto.
    */
   hint(): Hint | undefined {
     const wrong = this.wrong();
@@ -111,9 +128,20 @@ export class Game {
     }
     const missing = this.puzzle.solution.find((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
     if (!missing) return undefined;
-    this.place(missing);
+    const found = nextDeduction(this.puzzle, this.rects);
+    // Le deduzioni valgono per ogni soluzione: fuori dalla soluzione solo se non è unica.
+    const deduced = found && this.puzzle.solution.some((sol) => sameRect(sol, found.rect)) ? found : undefined;
     this.hintsUsed++;
-    return { placed: missing };
+    if (!deduced) {
+      this.place(missing);
+      return { placed: missing };
+    }
+    const { clues, cols } = this.puzzle;
+    const reason: Reason = { rule: deduced.rule, clue: clues[deduced.clue]! };
+    if (deduced.cell !== undefined) reason.cell = { r: Math.floor(deduced.cell / cols), c: deduced.cell % cols };
+    if (deduced.by !== undefined) reason.by = clues[deduced.by]!;
+    this.place(deduced.rect);
+    return { placed: deduced.rect, reason };
   }
 
   isSolved(): boolean {

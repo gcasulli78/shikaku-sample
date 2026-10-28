@@ -1,4 +1,4 @@
-import { formatTime, Game, Timer, type Hint } from "./game";
+import { formatTime, Game, Timer, type Hint, type Reason } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import {
   area,
@@ -64,6 +64,42 @@ const SHAPE_LABELS: Record<Shape, string> = {
 function clueLabel(clue: Clue): string {
   const shape = clue.shape ? SHAPE_LABELS[clue.shape] : "forma libera";
   return `${shape}, ${clue.n !== undefined ? `${clue.n} caselle` : "caselle libere"}`;
+}
+
+/** Aggettivi della forma nei messaggi del suggerimento ("il 6 verticale"). */
+const SHAPE_WORDS: Record<Shape, string> = { square: "quadrato", oblong: "non quadrato", wide: "orizzontale", tall: "verticale" };
+
+/**
+ * L'indizio con l'articolo, semplice o con di/a: "il 6", "dell'8", "all'indizio quadrato".
+ * Si apostrofano i numeri che si leggono con una vocale (uno, otto, undici, ottanta…).
+ */
+function clueName(clue: Clue, prep: "" | "di" | "a" = ""): string {
+  const { n } = clue;
+  const noun = n !== undefined ? String(n) : clue.shape ? "indizio" : "?";
+  const vowel = n === undefined ? noun === "indizio" : n === 1 || n === 8 || n === 11 || (n >= 80 && n <= 89);
+  const article = vowel ? { "": "l'", di: "dell'", a: "all'" }[prep] : { "": "il ", di: "del ", a: "al " }[prep];
+  return `${article}${noun}${clue.shape ? ` ${SHAPE_WORDS[clue.shape]}` : ""}`;
+}
+
+/** Perché il pezzo suggerito è obbligato, a parole. */
+function reasonText(reason: Reason | undefined): string {
+  if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
+  const name = clueName(reason.clue);
+  const of = clueName(reason.clue, "di");
+  const text = {
+    single: `${name} può stare solo così.`,
+    owner: `Solo ${name} può coprire la casella evidenziata: gli resta una sola forma.`,
+    sure: `Le caselle che ${clueName(reason.by ?? reason.clue)} copre comunque tolgono spazio ${clueName(reason.clue, "a")}: gli resta una sola forma.`,
+    hole: `Le altre forme ${of} lascerebbero caselle o indizi senza copertura.`,
+    guess: `Provando le altre forme ${of} si arriva a una contraddizione.`,
+    deep: `Provando le altre forme ${of} si arriva a una contraddizione, dopo qualche passo.`,
+  }[reason.rule];
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function hintText(hint: Hint): string {
+  if ("removed" in hint) return hint.removed.length === 1 ? "Tolto un rettangolo sbagliato." : "Tolti i rettangoli sbagliati.";
+  return reasonText(hint.reason);
 }
 
 /**
@@ -233,6 +269,8 @@ export function startApp(): void {
   let hues: number[] = [];
   let solved = false;
   let lastHint: Hint | undefined;
+  /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
+  let gameStatus = "";
   let request = 0;
 
   // --- Tema ---
@@ -389,7 +427,7 @@ export function startApp(): void {
     else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
     const variantNote = variant === "shapes" ? ` · ${variantLabel(variant)}` : "";
-    setStatus(`<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`);
+    gameStatus = `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantNote}${note}`;
     render();
     prefetch(choice);
   };
@@ -420,6 +458,8 @@ export function startApp(): void {
     const { rows, cols, clues } = game.puzzle;
     board.replaceChildren();
     preview = undefined;
+    if (lastHint) statusEl.textContent = hintText(lastHint);
+    else setStatus(gameStatus);
 
     // Linee della griglia sotto i rettangoli, numeri sopra.
     for (let r = 0; r < rows; r++) {
@@ -452,6 +492,16 @@ export function startApp(): void {
         gridArea(el, rect);
         board.append(el);
       }
+    }
+
+    // Il motivo del suggerimento: la casella decisiva e gli indizi coinvolti lampeggiano.
+    const reason = lastHint && "placed" in lastHint ? lastHint.reason : undefined;
+    for (const spot of [reason?.cell, reason?.clue, reason?.by]) {
+      if (!spot) continue;
+      const el = document.createElement("div");
+      el.className = "hint-mark";
+      el.style.gridArea = `${spot.r + 1} / ${spot.c + 1}`;
+      board.append(el);
     }
 
     for (const clue of clues) {
