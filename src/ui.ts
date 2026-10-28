@@ -282,33 +282,26 @@ const THEME_ICONS: Record<Theme, string> = {
 const THEME_LABELS: Record<Theme, string> = { auto: "Tema: automatico", light: "Tema: chiaro", dark: "Tema: scuro" };
 const NEXT_THEME: Record<Theme, Theme> = { auto: "light", light: "dark", dark: "auto" };
 
-/** Tonalità ben distinte tra loro. */
-const HUES = [205, 145, 30, 280, 350, 175, 55, 245];
-
-function touches(a: Rect, b: Rect): boolean {
-  const rowsOverlap = a.r < b.r + b.h && b.r < a.r + a.h;
-  const colsOverlap = a.c < b.c + b.w && b.c < a.c + a.w;
-  return (
-    (rowsOverlap && (a.c + a.w === b.c || b.c + b.w === a.c)) ||
-    (colsOverlap && (a.r + a.h === b.r || b.r + b.h === a.r))
-  );
-}
+/** Tinte OKLCH ben distinte tra loro, alla stessa luminosità (vedi --pill-l in style.css). */
+const HUES = [250, 150, 55, 320, 25, 195, 95, 285];
 
 /**
- * Una tonalità per numero, scelta in modo che i rettangoli confinanti nella soluzione
- * abbiano colori diversi (colorazione greedy del grafo delle adiacenze).
+ * Una tinta per indizio, diversa da quelle degli indizi vicini (entro tre caselle), così
+ * due pastiglie uguali non stanno accanto. Dipende solo dalla posizione degli indizi, non
+ * dalla soluzione: i colori non devono suggerire niente.
  */
-function assignHues(solution: Rect[]): number[] {
+function assignHues(clues: Clue[]): number[] {
   const hues: number[] = [];
   const offset = Math.floor(Math.random() * HUES.length);
-  solution.forEach((rect, i) => {
+  clues.forEach((clue, i) => {
     const used = new Map<number, number>();
     for (let j = 0; j < i; j++) {
-      if (touches(rect, solution[j]!)) used.set(hues[j]!, (used.get(hues[j]!) ?? 0) + 1);
+      const other = clues[j]!;
+      if (Math.max(Math.abs(other.r - clue.r), Math.abs(other.c - clue.c)) <= 3) used.set(hues[j]!, (used.get(hues[j]!) ?? 0) + 1);
     }
     const candidates = HUES.map((_, k) => HUES[(k + offset + i) % HUES.length]!);
     const free = candidates.find((h) => !used.has(h));
-    // Con più di 8 vicini già colorati si prende il colore meno usato tra loro.
+    // Con tutti i colori già usati vicino si prende il meno usato.
     hues.push(free ?? candidates.reduce((best, h) => ((used.get(h) ?? 0) < (used.get(best) ?? 0) ? h : best)));
   });
   return hues;
@@ -336,6 +329,8 @@ export function startApp(): void {
   const colsInput = $<HTMLInputElement>("cols");
   const timerEl = $<HTMLSpanElement>("timer");
   const themeBtn = $<HTMLButtonElement>("theme");
+  const settingsBtn = $<HTMLButtonElement>("settings-btn");
+  const settingsPanel = $<HTMLElement>("settings");
   const undoBtn = $<HTMLButtonElement>("undo");
   const clearBtn = $<HTMLButtonElement>("clear");
   const hintBtn = $<HTMLButtonElement>("hint");
@@ -398,6 +393,12 @@ export function startApp(): void {
     applyTheme();
   });
   applyTheme();
+
+  // --- Impostazioni: griglia, difficoltà, variante e tema in un riquadro che si apre a richiesta ---
+  settingsBtn.addEventListener("click", () => {
+    settingsPanel.hidden = !settingsPanel.hidden;
+    settingsBtn.ariaExpanded = String(!settingsPanel.hidden);
+  });
 
   // --- Scelta dimensione ---
   for (const preset of PRESETS) sizeSelect.add(new Option(preset.label, preset.id));
@@ -539,7 +540,7 @@ export function startApp(): void {
     game = saved?.game ? Game.restore(puzzle, saved.game) : new Game(puzzle);
     gameVariant = variant;
     difficulty = puzzle.difficulty;
-    hues = assignHues(puzzle.solution);
+    hues = assignHues(puzzle.clues);
     solved = false;
     clearMessages();
     timer.reset(saved?.elapsed ?? 0);
@@ -646,17 +647,21 @@ export function startApp(): void {
       board.append(el);
     }
 
-    for (const clue of clues) {
+    clues.forEach((clue, i) => {
       const el = document.createElement("div");
       el.className = "clue";
-      if (clue.shape) el.classList.add(clue.shape);
-      if (clue.n === undefined) el.classList.add("open");
-      el.style.gridArea = `${clue.r + 1} / ${clue.c + 1}`;
-      // "?" solo quando non c'è né numero né forma.
-      el.textContent = clue.n !== undefined ? String(clue.n) : clue.shape ? "" : "?";
+      if (clue.shape) el.classList.add("shaped");
+      cellArea(el, clue.r, clue.c);
       el.ariaLabel = clueLabel(clue);
+      // La forma della pastiglia dice il vincolo; cerchio con solo il numero, grigia col "?".
+      const pill = document.createElement("span");
+      pill.className = `pill ${clue.shape ?? (clue.n !== undefined ? "plain" : "any")}`;
+      if (clue.n === undefined) pill.classList.add("open");
+      pill.style.setProperty("--h", String(hues[i]));
+      pill.textContent = clue.n !== undefined ? String(clue.n) : clue.shape ? "" : "?";
+      el.append(pill);
       board.append(el);
-    }
+    });
     board.classList.toggle("solved", solved);
     renderCursor();
 

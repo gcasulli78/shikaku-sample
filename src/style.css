@@ -8,30 +8,32 @@
   --accent: #3b6fc4;
   --accent-text: #ffffff;
   --bad: #c2483d;
-  --rect-s: 68%;
-  --rect-l: 84%;
-  --rect-edge-l: 45%;
+  --rect-fill-l: 0.92;
+  --rect-fill-c: 0.05;
+  --rect-edge-l: 0.62;
   --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 6%);
-  /* Segue --text, quindi vale per entrambi i temi. */
-  --clue-shape: color-mix(in srgb, var(--text) 55%, transparent);
+  /* Pastiglie degli indizi: luminosità uguale per tutte le tinte (OKLCH), così il numero
+     bianco ha lo stesso contrasto su ogni colore. */
+  --pill-l: 0.55;
+  --pill-c: 0.15;
   --black-cell: #34383e;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #15171a;
-    --surface: #1e2125;
+    --bg: #16181c;
+    --surface: #1d2025;
     --text: #e8e6e1;
     --muted: #9aa0a7;
     --line: #3a3f45;
-    --grid: #2b2f34;
+    --grid: #3b4047;
     --accent: #6f9be6;
     --accent-text: #0f1420;
     --bad: #e2766c;
-    --rect-s: 38%;
-    --rect-l: 30%;
-    --rect-edge-l: 62%;
+    --rect-fill-l: 0.33;
+    --rect-fill-c: 0.07;
+    --rect-edge-l: 0.66;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     --black-cell: #050607;
     color-scheme: dark;
@@ -39,18 +41,18 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #15171a;
-  --surface: #1e2125;
+  --bg: #16181c;
+  --surface: #1d2025;
   --text: #e8e6e1;
   --muted: #9aa0a7;
   --line: #3a3f45;
-  --grid: #2b2f34;
+  --grid: #3b4047;
   --accent: #6f9be6;
   --accent-text: #0f1420;
   --bad: #e2766c;
-  --rect-s: 38%;
-  --rect-l: 30%;
-  --rect-edge-l: 62%;
+  --rect-fill-l: 0.33;
+  --rect-fill-c: 0.07;
+  --rect-edge-l: 0.66;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%);
   --black-cell: #050607;
   color-scheme: dark;
@@ -84,7 +86,7 @@ body {
 .top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 h1 {
@@ -94,24 +96,52 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-.timer {
-  font-variant-numeric: tabular-nums;
-  font-size: 1.15rem;
-  color: var(--muted);
-  min-width: 3.5em;
-  text-align: right;
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.controls,
-.actions {
+.timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.timer svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Riquadri: impostazioni, tutorial, legenda. */
+.card {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.settings {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 8px;
+  gap: 10px;
+}
+
+.settings[hidden],
+.legend[hidden] {
+  display: none;
 }
 
 .actions {
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
 }
 
 .custom {
@@ -177,6 +207,42 @@ input,
   font-weight: 600;
 }
 
+/* Pulsanti a pillola: contornato, pieno tenue, e grande per le azioni principali. */
+.btn.outline,
+.btn.soft {
+  border-radius: 999px;
+  padding: 7px 18px;
+  font-weight: 600;
+}
+
+.btn.outline {
+  background: transparent;
+  border: 1.5px solid var(--text);
+}
+
+.btn.soft {
+  background: var(--line);
+  border-color: var(--line);
+}
+
+.btn.big {
+  min-height: 48px;
+  font-size: 1.05rem;
+}
+
+.btn.link {
+  background: none;
+  border: none;
+  min-height: 32px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn.link:hover:not(:disabled) {
+  color: var(--text);
+}
+
 .icon-btn {
   width: 38px;
   padding: 0;
@@ -195,11 +261,6 @@ input,
 }
 
 .tutorial {
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
   font-size: 0.92rem;
   line-height: 1.45;
 }
@@ -263,15 +324,16 @@ input,
   --cols: 5;
   --rows: 5;
   /* Lato massimo: larghezza disponibile, ma anche l'altezza dello schermo. */
-  width: min(100%, calc((100dvh - 360px) * var(--cols) / var(--rows)));
+  width: min(100%, calc((100dvh - 390px) * var(--cols) / var(--rows)));
   min-width: min(100%, 220px);
   aspect-ratio: var(--cols) / var(--rows);
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   grid-template-rows: repeat(var(--rows), 1fr);
   background: var(--surface);
-  border: 2px solid var(--text);
-  border-radius: 4px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
   box-shadow: var(--shadow);
   touch-action: none;
   user-select: none;
@@ -281,8 +343,8 @@ input,
 }
 
 .cell {
-  border-right: 1px solid var(--grid);
-  border-bottom: 1px solid var(--grid);
+  border-right: 1px dashed var(--grid);
+  border-bottom: 1px dashed var(--grid);
   pointer-events: none;
 }
 
@@ -291,155 +353,120 @@ input,
   place-items: center;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  font-size: calc(100cqw / var(--cols) * 0.48);
+  font-size: calc(100cqw / var(--cols) * 0.4);
   z-index: 2;
   pointer-events: none;
 }
 
-/* Forme: il contorno dietro il numero dice la forma. Quadrato, rettangolo orizzontale e
-   verticale sono un contorno semplice; il non quadrato a orientamento libero è una croce
-   (orizzontale + verticale insieme). */
-.clue.square,
-.clue.oblong,
-.clue.wide,
-.clue.tall,
-.sample.square,
-.sample.oblong,
-.sample.wide,
-.sample.tall {
+/* Pastiglia dell'indizio: colore proprio (--h, tinta OKLCH), numero bianco; la forma dice
+   il vincolo. Cerchio = solo numero; quadrato; rettangolino orizzontale o verticale;
+   croce = non quadrato con verso libero (linee interne tratteggiate); grigio = "?". */
+.pill {
+  display: grid;
+  place-items: center;
   position: relative;
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  background: oklch(var(--pill-l) var(--pill-c) var(--h, 250));
+  color: #fff;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
 }
 
-.clue.square::before,
-.clue.oblong::before,
-.clue.wide::before,
-.clue.tall::before,
-.sample.square::before,
-.sample.oblong::before,
-.sample.wide::before,
-.sample.tall::before {
-  content: "";
-  position: absolute;
-  inset: 50% auto auto 50%;
-  translate: -50% -50%;
-  z-index: -1;
+.pill.square {
+  border-radius: 16%;
 }
 
-.clue.square::before,
-.clue.wide::before,
-.clue.tall::before,
-.sample.square::before,
-.sample.wide::before,
-.sample.tall::before {
-  border: 1.5px solid var(--clue-shape);
-  border-radius: 2px;
+.pill.wide {
+  width: 86%;
+  height: 56%;
+  border-radius: 12% / 20%;
 }
 
-.clue.square::before,
-.clue.wide::before,
-.clue.tall::before {
-  border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
+.pill.tall {
+  width: 56%;
+  height: 86%;
+  border-radius: 20% / 12%;
 }
 
-.clue.square::before {
-  width: 70%;
-  height: 70%;
-}
-
-.clue.wide::before {
+.pill.oblong {
   width: 90%;
-  height: 54%;
-}
-
-/* Più largo di metà cella, perché ci stiano i numeri a due cifre. */
-.clue.tall::before {
-  width: 60%;
   height: 90%;
-}
-
-/* La croce è una maschera SVG colorata con --clue-shape: contorno esterno pieno,
-   linee interne (il quadrato centrale) tratteggiate. */
-.clue.oblong::before,
-.sample.oblong::before {
-  background: var(--clue-shape);
+  border-radius: 0;
+  box-shadow: none;
   -webkit-mask: var(--cross) center / 100% 100% no-repeat;
   mask: var(--cross) center / 100% 100% no-repeat;
-  --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23000' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M26 3H74V26H97V74H74V97H26V74H3V26H26Z'/%3E%3Cpath d='M26 26H74V74H26Z' stroke-width='4' stroke-dasharray='6 5'/%3E%3C/svg%3E");
+  --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M29 4H71Q75 4 75 8V25H92Q96 25 96 29V71Q96 75 92 75H75V92Q75 96 71 96H29Q25 96 25 92V75H8Q4 75 4 71V29Q4 25 8 25H25V8Q25 4 29 4Z'/%3E%3C/svg%3E");
 }
 
-.clue.oblong::before {
-  width: 90%;
-  height: 90%;
+/* Sotto il numero (la maschera crea un contesto di sovrapposizione: -1 resta sopra lo sfondo). */
+.pill.oblong::after {
+  content: "";
+  position: absolute;
+  inset: 25%;
+  z-index: -1;
+  border: 1px dashed rgb(255 255 255 / 45%);
 }
 
-/* Senza numero la figura si riempie appena, per vedersi bene anche da sola. */
-.clue.open.square::before,
-.clue.open.wide::before,
-.clue.open.tall::before {
-  background: color-mix(in srgb, var(--clue-shape) 22%, transparent);
+.pill.any {
+  background: oklch(0.5 0 0);
 }
 
-.clue.open.oblong::before {
-  --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23000' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M26 3H74V26H97V74H74V97H26V74H3V26H26Z' fill='%23000' fill-opacity='.22'/%3E%3Cpath d='M26 26H74V74H26Z' stroke-width='4' stroke-dasharray='6 5'/%3E%3C/svg%3E");
+.clue.shaped {
+  font-size: calc(100cqw / var(--cols) * 0.36);
 }
 
-.clue.oblong,
-.clue.wide,
-.clue.tall {
-  font-size: calc(100cqw / var(--cols) * 0.4);
+/* Legenda delle forme. */
+.legend {
+  font-size: 0.9rem;
 }
 
-.sample {
-  display: inline-grid;
-  place-items: center;
-  min-width: 1.6em;
-  height: 1.4em;
-  font-weight: 700;
-  color: var(--text);
-  vertical-align: middle;
+.legend h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  text-align: center;
 }
 
-.sample.square::before {
-  width: 1.3em;
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-grid li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pill.sample {
+  flex: none;
+  width: 1.9em;
+  height: 1.9em;
+  font-size: 0.85rem;
+}
+
+.pill.sample.wide {
   height: 1.3em;
 }
 
-.sample.oblong::before {
-  width: 1.9em;
-  height: 1.9em;
+.pill.sample.tall {
+  width: 1.3em;
 }
 
-.sample.wide::before {
-  width: 1.9em;
-  height: 1.1em;
-}
-
-.sample.tall::before {
-  width: 1.25em;
-  height: 1.9em;
-}
-
-.sample.oblong,
-.sample.tall {
-  height: 1.9em;
-}
-
-.sample.square,
-.sample.oblong,
-.sample.wide,
-.sample.tall {
-  isolation: isolate;
-  min-width: 2em;
-}
-
-/* Ogni voce della legenda resta intera: si va a capo solo tra una voce e l'altra. */
-.legend .item {
-  white-space: nowrap;
-  margin: 0 0.35em;
-}
-
-.legend[hidden] {
-  display: none;
+.pill.sample.oblong {
+  width: 2.2em;
+  height: 2.2em;
 }
 
 /* Casella nera (variante Caselle nere): da non coprire. */
@@ -457,16 +484,16 @@ input,
 
 .rect {
   z-index: 1;
-  margin: 2px;
-  border-radius: 4px;
+  margin: 3px;
+  border-radius: 8px;
   pointer-events: none;
   border: 2px dashed var(--muted);
   background: color-mix(in srgb, var(--muted) 14%, transparent);
 }
 
 .rect.valid {
-  border: 2px solid hsl(var(--h) 55% var(--rect-edge-l));
-  background: hsl(var(--h) var(--rect-s) var(--rect-l));
+  border: 2px solid oklch(var(--rect-edge-l) 0.13 var(--h));
+  background: oklch(var(--rect-fill-l) var(--rect-fill-c) var(--h));
 }
 
 .rect.bad {
