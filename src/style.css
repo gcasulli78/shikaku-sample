@@ -364,8 +364,10 @@ input,
   min-width: min(100%, 220px);
   aspect-ratio: var(--cols) / var(--rows);
   display: grid;
-  grid-template-columns: repeat(var(--cols), 1fr);
-  grid-template-rows: repeat(var(--rows), 1fr);
+  /* minmax(0, …): le caselle restano tutte uguali anche se un contenuto (la scritta
+     dell'anteprima su una colonna stretta) è più largo. */
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
   background: var(--surface);
   border: 2px solid var(--line);
   border-radius: 12px;
@@ -608,11 +610,13 @@ input,
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   pointer-events: none;
   display: grid;
-  place-items: end;
+  place-items: start;
   padding: 2px 5px;
   font-size: max(11px, calc(100cqw / var(--cols) * 0.26));
   font-weight: 600;
   color: var(--accent);
+  /* Su una colonna sola la scritta sporge invece di andare a capo. */
+  white-space: nowrap;
 }
 
 .preview.blocked {

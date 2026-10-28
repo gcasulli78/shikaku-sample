@@ -1,6 +1,7 @@
 import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame, type WrongReason } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
+import { moveSelection, selectionRect, startSelection, type Selection } from "./selection";
 import { completePuzzle, encodePuzzle, puzzleFromCode } from "./share";
 import { TUTORIAL } from "./tutorial";
 import {
@@ -14,7 +15,6 @@ import {
   MIN_SIZE,
   minSide,
   PRESETS,
-  rectFromCorners,
   sameRect,
   TIME_LIMITS,
   VARIANTS,
@@ -709,13 +709,18 @@ export function startApp(): void {
     preview = undefined;
   };
 
-  const showPreview = (rect: Rect) => {
+  /** Anteprima della selezione; at è dove sta il dito (o il cursore). */
+  const showPreview = (sel: Selection, at: [number, number]) => {
+    const rect = selectionRect(sel);
     if (!preview) {
       preview = document.createElement("div");
       preview.className = "preview";
       board.append(preview);
     }
     gridArea(preview, rect);
+    // La scritta va nella metà opposta a quella del dito, per non finirci sotto.
+    const half = (v: number, from: number, size: number) => (v - from < size / 2 ? "end" : "start");
+    preview.style.placeItems = `${half(at[0], rect.r, rect.h)} ${half(at[1], rect.c, rect.w)}`;
     preview.classList.toggle("blocked", game.intent(rect) === "blocked");
     // ✓ quando il rettangolo rispetta il suo indizio (utile soprattutto con le forme).
     const label = area(rect) > 1 ? `${rect.h}×${rect.w}=${area(rect)}` : "";
@@ -767,32 +772,34 @@ export function startApp(): void {
     return [r, c];
   };
 
-  let drag: { pointerId: number; start: [number, number]; end: [number, number] } | undefined;
+  /** start: la casella da cui si è partiti; at: dove sta il dito adesso. */
+  let drag: { pointerId: number; start: [number, number]; at: [number, number]; sel: Selection } | undefined;
 
   board.addEventListener("pointerdown", (e) => {
     if (keyboard) {
       keyboard = false;
-      anchor = undefined;
+      selecting = undefined;
       renderCursor();
     }
     if (solved || drag || e.button !== 0) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
-    drag = { pointerId: e.pointerId, start: cell, end: cell };
+    drag = { pointerId: e.pointerId, start: cell, at: cell, sel: startSelection(...cell) };
     board.setPointerCapture(e.pointerId);
-    showPreview(rectFromCorners(...cell, ...cell));
+    showPreview(drag.sel, cell);
   });
 
   board.addEventListener("pointermove", (e) => {
     if (!drag || e.pointerId !== drag.pointerId) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
-    if (cell[0] === drag.end[0] && cell[1] === drag.end[1]) return;
-    drag.end = cell;
-    showPreview(rectFromCorners(...drag.start, ...cell));
+    if (cell[0] === drag.at[0] && cell[1] === drag.at[1]) return;
+    drag.at = cell;
+    drag.sel = moveSelection(drag.sel, ...cell);
+    showPreview(drag.sel, cell);
   });
 
-  /** Il rettangolo da start a end, disegnato col mouse, col dito o da tastiera. */
-  const commitRect = (start: [number, number], end: [number, number]) => {
-    const rect = rectFromCorners(...start, ...end);
+  /** Posa la selezione disegnata col mouse, col dito o da tastiera (start: casella di partenza). */
+  const commitRect = (sel: Selection, start: [number, number]) => {
+    const rect = selectionRect(sel);
     const intent = game.intent(rect);
     // "blocked" e "none": la griglia non cambia, quindi né cronometro né suggerimento evidenziato.
     if (intent === "remove") game.remove(game.rectAt(...start)!);
@@ -806,19 +813,20 @@ export function startApp(): void {
 
   const endDrag = (e: PointerEvent, commit: boolean) => {
     if (!drag || e.pointerId !== drag.pointerId) return;
-    const { start, end } = drag;
+    const { start, sel } = drag;
     drag = undefined;
-    if (commit) commitRect(start, end);
+    if (commit) commitRect(sel, start);
     else render();
   };
   board.addEventListener("pointerup", (e) => endDrag(e, true));
   board.addEventListener("pointercancel", (e) => endDrag(e, false));
 
-  // --- Tastiera: un cursore sulla griglia; Invio fissa un angolo e poi chiude il rettangolo ---
+  // --- Tastiera: un cursore sulla griglia; Invio inizia la selezione e poi la posa ---
   /** Il cursore si vede solo usando la tastiera, finché non si torna al mouse. */
   let keyboard = false;
   let cursor: [number, number] = [0, 0];
-  let anchor: [number, number] | undefined;
+  /** La selezione da tastiera, dalla casella dove si è premuto Invio. */
+  let selecting: { start: [number, number]; sel: Selection } | undefined;
   let cursorEl: HTMLDivElement | undefined;
 
   const renderCursor = () => {
@@ -831,7 +839,7 @@ export function startApp(): void {
     cursorEl.className = "cursor";
     cellArea(cursorEl, ...cursor);
     board.append(cursorEl);
-    if (anchor) showPreview(rectFromCorners(...anchor, ...cursor));
+    if (selecting) showPreview(selecting.sel, cursor);
   };
 
   /** Cosa c'è sotto il cursore, per i lettori di schermo. */
@@ -842,8 +850,8 @@ export function startApp(): void {
     const parts = [`Riga ${r + 1}, colonna ${c + 1}`];
     if (clue) parts.push(`indizio: ${clueLabel(clue)}`);
     parts.push(game.isBlocked(r, c) ? "casella nera" : rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
-    if (anchor) {
-      const sel = rectFromCorners(...anchor, ...cursor);
+    if (selecting) {
+      const sel = selectionRect(selecting.sel);
       parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
     }
     srEl.textContent = parts.join(", ") + ".";
@@ -858,15 +866,16 @@ export function startApp(): void {
       const { rows, cols } = game.puzzle;
       if (keyboard) cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
       keyboard = true;
+      if (selecting) selecting.sel = moveSelection(selecting.sel, ...cursor);
     } else if (e.key === "Enter" || e.key === " ") {
       keyboard = true;
-      if (anchor) {
-        const start = anchor;
-        anchor = undefined;
-        commitRect(start, cursor);
-      } else anchor = cursor;
-    } else if (e.key === "Escape" && anchor) {
-      anchor = undefined;
+      if (selecting) {
+        const { start, sel } = selecting;
+        selecting = undefined;
+        commitRect(sel, start);
+      } else selecting = { start: cursor, sel: startSelection(...cursor) };
+    } else if (e.key === "Escape" && selecting) {
+      selecting = undefined;
       render();
     } else if ((e.key === "Delete" || e.key === "Backspace") && keyboard) {
       const rect = game.rectAt(...cursor);
@@ -877,12 +886,12 @@ export function startApp(): void {
       }
     } else return;
     e.preventDefault();
-    if (!anchor) clearPreview();
+    if (!selecting) clearPreview();
     renderCursor();
     describeCursor();
   });
   board.addEventListener("blur", () => {
-    anchor = undefined;
+    selecting = undefined;
     clearPreview();
   });
 

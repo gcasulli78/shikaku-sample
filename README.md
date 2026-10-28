@@ -23,6 +23,7 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 | `src/solver.ts` | Conta le soluzioni con backtracking (si ferma a 2) |
 | `src/grader.ts` | Misura la difficoltà risolvendo "come una persona" con regole graduate; trova la prossima deduzione per i suggerimenti |
 | `src/share.ts` | Puzzle nel link: codifica degli indizi, soluzione e livello ricostruiti all'apertura |
+| `src/selection.ts` | La selezione mentre si trascina: può partire anche da una casella in mezzo a un lato |
 | `src/tutorial.ts` | Le griglie del tutorial, scritte a mano |
 | `src/records.ts` | Record personali per griglia, livello e variante |
 | `src/worker.ts` | Genera i puzzle in un Web Worker, senza bloccare la pagina |
