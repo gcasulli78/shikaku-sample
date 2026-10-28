@@ -55,7 +55,7 @@ Tutto resta nel browser (`localStorage`): niente server, niente account.
 ## Aspetto
 
 Ogni indizio è una pastiglia colorata con il numero in bianco, e il rettangolo giusto prende il suo colore. La forma della pastiglia dice il vincolo: cerchio = solo il numero, quadrato, rettangolino orizzontale o verticale, croce = non quadrato con verso libero, grigio col `?` = forma e area libere. I colori dipendono solo dalla posizione degli indizi (vicini con colori diversi), mai dalla soluzione.
-Griglia, difficoltà, variante e tema stanno nel riquadro che si apre con l'ingranaggio.
+Griglia, difficoltà, variante e tema stanno nel riquadro che si apre con l'ingranaggio o toccando la riga sotto il titolo con la scelta attuale (per esempio "10×10 · Difficile · Forme").
 
 ## Varianti
 

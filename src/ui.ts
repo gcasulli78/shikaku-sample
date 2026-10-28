@@ -331,6 +331,7 @@ export function startApp(): void {
   const themeBtn = $<HTMLButtonElement>("theme");
   const settingsBtn = $<HTMLButtonElement>("settings-btn");
   const settingsPanel = $<HTMLElement>("settings");
+  const choiceBtn = $<HTMLButtonElement>("choice");
   const undoBtn = $<HTMLButtonElement>("undo");
   const clearBtn = $<HTMLButtonElement>("clear");
   const hintBtn = $<HTMLButtonElement>("hint");
@@ -395,10 +396,20 @@ export function startApp(): void {
   applyTheme();
 
   // --- Impostazioni: griglia, difficoltà, variante e tema in un riquadro che si apre a richiesta ---
-  settingsBtn.addEventListener("click", () => {
+  // La riga con la scelta attuale apre lo stesso riquadro dell'ingranaggio.
+  const toggleSettings = () => {
     settingsPanel.hidden = !settingsPanel.hidden;
-    settingsBtn.ariaExpanded = String(!settingsPanel.hidden);
-  });
+    settingsBtn.ariaExpanded = choiceBtn.ariaExpanded = String(!settingsPanel.hidden);
+  };
+  settingsBtn.addEventListener("click", toggleSettings);
+  choiceBtn.addEventListener("click", toggleSettings);
+  /** "10×10 · Difficile · Forme": quello che i menu chiedono per la prossima partita. */
+  const syncChoice = () => {
+    const size = sizeSelect.value === CUSTOM ? `${rowsInput.value}×${colsInput.value}` : sizeSelect.selectedOptions[0]?.text;
+    const parts = [size, difficultyLabel(difficultySelect.value as Difficulty), variantLabel(variantSelect.value as Variant)];
+    choiceBtn.textContent = parts.join(" · ");
+  };
+  settingsPanel.addEventListener("change", syncChoice);
 
   // --- Scelta dimensione ---
   for (const preset of PRESETS) sizeSelect.add(new Option(preset.label, preset.id));
@@ -664,6 +675,7 @@ export function startApp(): void {
     });
     board.classList.toggle("solved", solved);
     renderCursor();
+    syncChoice();
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;

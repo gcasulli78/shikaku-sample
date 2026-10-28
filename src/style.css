@@ -96,6 +96,42 @@ h1 {
   letter-spacing: 0.02em;
 }
 
+/* La scelta attuale (griglia · difficoltà · variante): si tocca per cambiarla. */
+.choice {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.choice::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  rotate: 45deg;
+}
+
+.choice[aria-expanded="true"]::after {
+  margin-top: 3px;
+  rotate: 225deg;
+}
+
+.choice:hover {
+  border-color: var(--accent);
+}
+
 .bar {
   display: flex;
   align-items: center;
@@ -324,7 +360,7 @@ input,
   --cols: 5;
   --rows: 5;
   /* Lato massimo: larghezza disponibile, ma anche l'altezza dello schermo. */
-  width: min(100%, calc((100dvh - 390px) * var(--cols) / var(--rows)));
+  width: min(100%, calc((100dvh - 430px) * var(--cols) / var(--rows)));
   min-width: min(100%, 220px);
   aspect-ratio: var(--cols) / var(--rows);
   display: grid;
