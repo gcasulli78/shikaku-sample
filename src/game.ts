@@ -51,7 +51,7 @@ export const HINT_COOLDOWN = 15_000;
 export interface SavedGame {
   rects: Rect[];
   hintsUsed: number;
-  /** Quando il suggerimento ha posato l'ultimo pezzo (Date.now). */
+  /** Quando il suggerimento ha posato l'ultimo pezzo, in tempo di gioco (ms del cronometro). */
   lastPlacedAt?: number;
   /** Usato un aiuto qualsiasi (anche solo un grado del suggerimento o la verifica). */
   helped?: boolean;
@@ -67,15 +67,16 @@ export class Game {
   helped = false;
   /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
   private pending: { rect: Rect; reason: Reason; stage: 1 | 2 } | undefined;
-  /** Quando il suggerimento ha posato l'ultimo pezzo (Date.now); vedi HINT_COOLDOWN. */
+  /** Quando il suggerimento ha posato l'ultimo pezzo, in tempo di gioco; vedi HINT_COOLDOWN. */
   private lastPlacedAt: number | undefined;
-  /** Attesa tra due pezzi suggeriti: 0 nel tutorial. */
-  hintCooldown = HINT_COOLDOWN;
+  /** Attesa tra due pezzi suggeriti, in ms: 0 nel tutorial. */
+  readonly hintCooldown: number;
   /** Caselle nere, una per cella (r * cols + c). */
   private readonly black: Uint8Array;
 
-  constructor(puzzle: Puzzle) {
+  constructor(puzzle: Puzzle, options: { hintCooldown?: number } = {}) {
     this.puzzle = puzzle;
+    this.hintCooldown = options.hintCooldown ?? HINT_COOLDOWN;
     this.black = new Uint8Array(puzzle.rows * puzzle.cols);
     for (const idx of puzzle.blocked ?? []) this.black[idx] = 1;
   }
@@ -91,8 +92,8 @@ export class Game {
   }
 
   /** Riprende una partita salvata; i rettangoli che si sovrappongono si scartano. */
-  static restore(puzzle: Puzzle, saved: SavedGame): Game {
-    const game = new Game(puzzle);
+  static restore(puzzle: Puzzle, saved: SavedGame, options: { hintCooldown?: number } = {}): Game {
+    const game = new Game(puzzle, options);
     for (const rect of saved.rects) if (game.canPlace(rect)) game.rects.push({ ...rect });
     game.hintsUsed = saved.hintsUsed;
     game.helped = saved.helped ?? saved.hintsUsed > 0;
@@ -192,9 +193,14 @@ export class Game {
     return this.wrong().length;
   }
 
-  /** Quanti ms mancano prima che il suggerimento possa posare un altro pezzo. */
-  cooldown(now = Date.now()): number {
-    return this.lastPlacedAt === undefined ? 0 : Math.max(0, this.lastPlacedAt + this.hintCooldown - now);
+  /**
+   * Quanti ms mancano prima che il suggerimento possa posare un altro pezzo; now è il tempo
+   * di gioco. Un ultimo pezzo "nel futuro" (salvato con l'orologio di sistema, prima che si
+   * usasse il cronometro) non blocca.
+   */
+  cooldown(now: number): number {
+    if (this.lastPlacedAt === undefined || this.lastPlacedAt > now) return 0;
+    return Math.max(0, this.lastPlacedAt + this.hintCooldown - now);
   }
 
   /** Il grado del suggerimento già mostrato: 0 nessuno, 1 l'indizio, 2 anche il motivo. */
@@ -208,7 +214,7 @@ export class Game {
    * gradi: indizio, motivo, pezzo. Se le regole non bastano posa subito un pezzo
    * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
    */
-  hint(now = Date.now()): Hint | undefined {
+  hint(now: number): Hint | undefined {
     const wrong = this.wrong();
     if (wrong.length > 0) {
       const why = this.whyWrong(wrong[0]!);
@@ -222,14 +228,7 @@ export class Game {
     this.helped = true;
     if (!this.pending) {
       const found = this.deduce();
-      if (!found) {
-        const wait = this.cooldown(now);
-        if (wait > 0) return { wait };
-        this.hintsUsed++;
-        this.lastPlacedAt = now;
-        this.place(missing);
-        return { placed: missing };
-      }
+      if (!found) return this.placeHinted(missing, undefined, now);
       this.pending = { ...found, stage: 1 };
       return { focus: found.reason };
     }
@@ -238,12 +237,17 @@ export class Game {
       this.pending = { rect, reason, stage: 2 };
       return { explain: reason };
     }
+    return this.placeHinted(rect, reason, now);
+  }
+
+  /** Posa il pezzo suggerito, se dall'ultimo sono passati HINT_COOLDOWN ms di gioco. */
+  private placeHinted(rect: Rect, reason: Reason | undefined, now: number): Hint {
     const wait = this.cooldown(now);
     if (wait > 0) return { wait };
     this.hintsUsed++;
     this.lastPlacedAt = now;
     this.place(rect);
-    return { placed: rect, reason };
+    return reason ? { placed: rect, reason } : { placed: rect };
   }
 
   /** Il prossimo pezzo deducibile, con il motivo. */

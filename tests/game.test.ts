@@ -132,7 +132,7 @@ describe("Game", () => {
     game.place({ r: 0, c: 0, h: 2, w: 1 }); // giusto
     game.place({ r: 0, c: 1, h: 1, w: 1 }); // sbagliato
     game.place({ r: 1, c: 1, h: 1, w: 2 }); // sbagliato
-    expect(game.hint()).toEqual({
+    expect(game.hint(0)).toEqual({
       removed: [
         { r: 0, c: 1, h: 1, w: 1 },
         { r: 1, c: 1, h: 1, w: 2 },
@@ -170,20 +170,20 @@ describe("Game", () => {
   it("senza errori il suggerimento procede a gradi: indizio, motivo, pezzo", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 1, w: 3 }); // sbagliato, copre entrambe le soluzioni
-    expect(game.hint()).toMatchObject({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
+    expect(game.hint(0)).toMatchObject({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
     expect(game.placed).toHaveLength(0);
     // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
     const reason = { rule: "single", clue: { r: 1, c: 2, n: 4 } };
-    expect(game.hint()).toEqual({ focus: reason });
+    expect(game.hint(0)).toEqual({ focus: reason });
     expect(game.hintStage).toBe(1);
-    expect(game.hint()).toEqual({ explain: reason });
+    expect(game.hint(0)).toEqual({ explain: reason });
     expect(game.hintStage).toBe(2);
     expect(game.placed).toHaveLength(0);
-    expect(game.hint()).toEqual({ placed: { r: 0, c: 1, h: 2, w: 2 }, reason });
+    expect(game.hint(0)).toEqual({ placed: { r: 0, c: 1, h: 2, w: 2 }, reason });
     expect(game.hintStage).toBe(0);
     expect(game.hintsUsed).toBe(2); // l'errore tolto e il pezzo posato
     // Una mossa azzera i gradi.
-    expect(game.hint()).toMatchObject({ focus: { clue: { r: 0, c: 0, n: 2 } } });
+    expect(game.hint(0)).toMatchObject({ focus: { clue: { r: 0, c: 0, n: 2 } } });
     game.undo();
     expect(game.hintStage).toBe(0);
   });
@@ -203,8 +203,7 @@ describe("Game", () => {
     expect(resumed.cooldown(10_000)).toBe(6000);
     expect(game.hint(16_000)).toMatchObject({ placed: { r: 0, c: 0, h: 2, w: 1 } });
     // Senza attesa (tutorial).
-    const tutorial = new Game(puzzle);
-    tutorial.hintCooldown = 0;
+    const tutorial = new Game(puzzle, { hintCooldown: 0 });
     for (let i = 0; i < 6; i++) tutorial.hint(0);
     expect(tutorial.isSolved()).toBe(true);
   });
@@ -224,7 +223,7 @@ describe("Game", () => {
   it("una partita salvata riprende rettangoli e aiuti, senza sovrapposizioni", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 2, w: 1 });
-    while (game.placed.length < 2) game.hint();
+    while (game.placed.length < 2) game.hint(0);
     const saved = JSON.parse(JSON.stringify(game.snapshot()));
     const resumed = Game.restore(puzzle, saved);
     expect(resumed.placed).toEqual(game.placed);
@@ -302,7 +301,7 @@ describe("Game", () => {
         { r: 1, c: 0, h: 1, w: 2 },
       ],
     };
-    expect(new Game(ambiguous).hint()).toEqual({ placed: { r: 0, c: 0, h: 1, w: 2 } });
+    expect(new Game(ambiguous).hint(0)).toEqual({ placed: { r: 0, c: 0, h: 1, w: 2 } });
   });
 });
 

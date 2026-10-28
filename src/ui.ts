@@ -1,7 +1,7 @@
 import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame, type WrongReason } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
-import { moveSelection, selectionRect, startSelection, type Selection } from "./selection";
+import { moveSelection, selectionAt, selectionRect, selectionStart, startSelection, type Selection } from "./selection";
 import { completePuzzle, encodePuzzle, puzzleFromCode } from "./share";
 import { TUTORIAL } from "./tutorial";
 import {
@@ -142,12 +142,15 @@ function wrongText(why: WrongReason, rect: Rect): string {
   }
 }
 
-function waitText(ms: number): string {
-  return `Il prossimo pezzo si può mostrare tra ${Math.ceil(ms / 1000)} s.`;
+/** "12 s": quanto manca, arrotondato per eccesso. */
+function secondsLeft(ms: number): string {
+  return `${Math.ceil(ms / 1000)} s`;
 }
 
-function hintText(hint: Hint): string {
-  if ("wait" in hint) return waitText(hint.wait);
+/** Un suggerimento mostrato (l'attesa non si mostra come suggerimento, ma come avviso). */
+type ShownHint = Exclude<Hint, { wait: number }>;
+
+function hintText(hint: ShownHint): string {
   if ("removed" in hint) {
     const why = wrongText(hint.wrong.why, hint.wrong.rect);
     return hint.removed.length === 1
@@ -160,8 +163,7 @@ function hintText(hint: Hint): string {
 }
 
 /** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva. */
-function hintSpots(hint: Hint): { r: number; c: number }[] {
-  if ("wait" in hint) return [];
+function hintSpots(hint: ShownHint): { r: number; c: number }[] {
   if ("removed" in hint) {
     const { why } = hint.wrong;
     return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
@@ -372,7 +374,7 @@ export function startApp(): void {
   let gameVariant: Variant = settings.variant;
   let hues: number[] = [];
   let solved = false;
-  let lastHint: Hint | undefined;
+  let lastHint: ShownHint | undefined;
   /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
   let gameStatus = "";
   /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
@@ -547,14 +549,14 @@ export function startApp(): void {
   const startGame = (
     puzzle: GenerateResult,
     variant: Variant,
-    options: { note?: string; saved?: SavedState; status?: string } = {},
+    options: { note?: string; saved?: SavedState; status?: string; hintCooldown?: number } = {},
   ) => {
-    const { note = "", saved } = options;
+    const { note = "", saved, hintCooldown } = options;
     request++; // una generazione ancora in corso non sostituisce questa partita
     newBtn.disabled = false;
     board.classList.remove("busy");
     const { rows, cols } = puzzle;
-    game = saved?.game ? Game.restore(puzzle, saved.game) : new Game(puzzle);
+    game = saved?.game ? Game.restore(puzzle, saved.game, { hintCooldown }) : new Game(puzzle, { hintCooldown });
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.clues);
@@ -567,6 +569,7 @@ export function startApp(): void {
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
     gameStatus =
       options.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantSuffix(variant)}${note}`;
+    syncChoice();
     save();
     render();
   };
@@ -672,8 +675,7 @@ export function startApp(): void {
       el.ariaLabel = clueLabel(clue);
       // La forma della pastiglia dice il vincolo; cerchio con solo il numero, grigia col "?".
       const pill = document.createElement("span");
-      pill.className = `pill ${clue.shape ?? (clue.n !== undefined ? "plain" : "any")}`;
-      if (clue.n === undefined) pill.classList.add("open");
+      pill.className = `pill ${clue.shape ?? (clue.n === undefined ? "any" : "")}`.trimEnd();
       pill.style.setProperty("--h", String(hues[i]));
       pill.textContent = clue.n !== undefined ? String(clue.n) : clue.shape ? "" : "?";
       el.append(pill);
@@ -681,11 +683,9 @@ export function startApp(): void {
     });
     board.classList.toggle("solved", solved);
     renderCursor();
-    syncChoice();
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
-    syncHintButton();
     checkBtn.disabled = solved || game.placed.length === 0;
     shareBtn.disabled = false;
     renderTimer();
@@ -693,9 +693,11 @@ export function startApp(): void {
 
   /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
   const syncHintButton = () => {
-    const wait = game.hintStage === 2 ? game.cooldown() : 0;
+    const wait = game.hintStage === 2 ? game.cooldown(timer.elapsed()) : 0;
+    const label = wait > 0 ? `${HINT_LABELS[2]} (${secondsLeft(wait)})` : HINT_LABELS[game.hintStage]!;
     hintBtn.disabled = solved || wait > 0;
-    hintBtn.textContent = wait > 0 ? `${HINT_LABELS[2]} (${Math.ceil(wait / 1000)} s)` : HINT_LABELS[game.hintStage]!;
+    // Chiamata dal cronometro 4 volte al secondo: si scrive solo se cambia.
+    if (hintBtn.textContent !== label) hintBtn.textContent = label;
   };
 
   const renderTimer = () => {
@@ -709,9 +711,9 @@ export function startApp(): void {
     preview = undefined;
   };
 
-  /** Anteprima della selezione; at è dove sta il dito (o il cursore). */
-  const showPreview = (sel: Selection, at: [number, number]) => {
+  const showPreview = (sel: Selection) => {
     const rect = selectionRect(sel);
+    const at = selectionAt(sel);
     if (!preview) {
       preview = document.createElement("div");
       preview.className = "preview";
@@ -772,8 +774,7 @@ export function startApp(): void {
     return [r, c];
   };
 
-  /** start: la casella da cui si è partiti; at: dove sta il dito adesso. */
-  let drag: { pointerId: number; start: [number, number]; at: [number, number]; sel: Selection } | undefined;
+  let drag: { pointerId: number; sel: Selection } | undefined;
 
   board.addEventListener("pointerdown", (e) => {
     if (keyboard) {
@@ -783,26 +784,26 @@ export function startApp(): void {
     }
     if (solved || drag || e.button !== 0) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
-    drag = { pointerId: e.pointerId, start: cell, at: cell, sel: startSelection(...cell) };
+    drag = { pointerId: e.pointerId, sel: startSelection(...cell) };
     board.setPointerCapture(e.pointerId);
-    showPreview(drag.sel, cell);
+    showPreview(drag.sel);
   });
 
   board.addEventListener("pointermove", (e) => {
     if (!drag || e.pointerId !== drag.pointerId) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
-    if (cell[0] === drag.at[0] && cell[1] === drag.at[1]) return;
-    drag.at = cell;
+    const [r, c] = selectionAt(drag.sel);
+    if (cell[0] === r && cell[1] === c) return;
     drag.sel = moveSelection(drag.sel, ...cell);
-    showPreview(drag.sel, cell);
+    showPreview(drag.sel);
   });
 
-  /** Posa la selezione disegnata col mouse, col dito o da tastiera (start: casella di partenza). */
-  const commitRect = (sel: Selection, start: [number, number]) => {
+  /** Posa la selezione disegnata col mouse, col dito o da tastiera. */
+  const commitRect = (sel: Selection) => {
     const rect = selectionRect(sel);
     const intent = game.intent(rect);
     // "blocked" e "none": la griglia non cambia, quindi né cronometro né suggerimento evidenziato.
-    if (intent === "remove") game.remove(game.rectAt(...start)!);
+    if (intent === "remove") game.remove(game.rectAt(...selectionStart(sel))!);
     else if (intent === "place") game.place(rect);
     else return render();
 
@@ -813,9 +814,9 @@ export function startApp(): void {
 
   const endDrag = (e: PointerEvent, commit: boolean) => {
     if (!drag || e.pointerId !== drag.pointerId) return;
-    const { start, sel } = drag;
+    const { sel } = drag;
     drag = undefined;
-    if (commit) commitRect(sel, start);
+    if (commit) commitRect(sel);
     else render();
   };
   board.addEventListener("pointerup", (e) => endDrag(e, true));
@@ -826,7 +827,7 @@ export function startApp(): void {
   let keyboard = false;
   let cursor: [number, number] = [0, 0];
   /** La selezione da tastiera, dalla casella dove si è premuto Invio. */
-  let selecting: { start: [number, number]; sel: Selection } | undefined;
+  let selecting: Selection | undefined;
   let cursorEl: HTMLDivElement | undefined;
 
   const renderCursor = () => {
@@ -839,7 +840,7 @@ export function startApp(): void {
     cursorEl.className = "cursor";
     cellArea(cursorEl, ...cursor);
     board.append(cursorEl);
-    if (selecting) showPreview(selecting.sel, cursor);
+    if (selecting) showPreview(selecting);
   };
 
   /** Cosa c'è sotto il cursore, per i lettori di schermo. */
@@ -851,7 +852,7 @@ export function startApp(): void {
     if (clue) parts.push(`indizio: ${clueLabel(clue)}`);
     parts.push(game.isBlocked(r, c) ? "casella nera" : rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
     if (selecting) {
-      const sel = selectionRect(selecting.sel);
+      const sel = selectionRect(selecting);
       parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
     }
     srEl.textContent = parts.join(", ") + ".";
@@ -866,14 +867,14 @@ export function startApp(): void {
       const { rows, cols } = game.puzzle;
       if (keyboard) cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
       keyboard = true;
-      if (selecting) selecting.sel = moveSelection(selecting.sel, ...cursor);
+      if (selecting) selecting = moveSelection(selecting, ...cursor);
     } else if (e.key === "Enter" || e.key === " ") {
       keyboard = true;
       if (selecting) {
-        const { start, sel } = selecting;
+        const sel = selecting;
         selecting = undefined;
-        commitRect(sel, start);
-      } else selecting = { start: cursor, sel: startSelection(...cursor) };
+        commitRect(sel);
+      } else selecting = startSelection(...cursor);
     } else if (e.key === "Escape" && selecting) {
       selecting = undefined;
       render();
@@ -910,10 +911,10 @@ export function startApp(): void {
   });
   hintBtn.addEventListener("click", () => {
     firstInput();
-    const hint = game.hint();
+    const hint = game.hint(timer.elapsed());
     if (hint && "wait" in hint) {
       // Troppo presto per un altro pezzo: restano evidenziati indizio e motivo già mostrati.
-      notice = waitText(hint.wait);
+      notice = `Il prossimo pezzo si può mostrare tra ${secondsLeft(hint.wait)}.`;
       return render();
     }
     clearMessages();
@@ -1017,9 +1018,9 @@ export function startApp(): void {
     const { rows, cols, clues, blocked } = step;
     startGame(completePuzzle({ rows, cols, clues, blocked })!, step.variant, {
       status: `Come si gioca · ${index + 1} di ${TUTORIAL.length}`,
+      // Nel tutorial si impara: nessuna attesa tra un pezzo suggerito e l'altro.
+      hintCooldown: 0,
     });
-    // Nel tutorial si impara: nessuna attesa tra un pezzo suggerito e l'altro.
-    game.hintCooldown = 0;
     tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
     tutorialTitle.textContent = step.title;
     tutorialText.textContent = step.text;

@@ -1,4 +1,4 @@
-import type { Rect } from "./types";
+import { rectFromCorners, type Rect } from "./types";
 
 /**
  * La selezione mentre si trascina (o si muove il cursore da tastiera), un asse alla volta.
@@ -18,8 +18,8 @@ interface Axis {
   side: number;
   /** Il punto più lontano raggiunto dal dito nel giro in corso da quella parte. */
   reach: number;
-  /** Il lato richiuso tornando sulla partenza, per riaprirlo se si stava attraversando. */
-  saved?: { lo?: number; hi?: number };
+  /** Il lato richiuso tornando sulla partenza (fin dove arrivava), per riaprirlo attraversando. */
+  saved?: number;
 }
 
 export interface Selection {
@@ -37,29 +37,36 @@ function move(a: Axis, v: number): Axis {
   const next: Axis = { ...a, last: v, side, reach };
   if (side === 0) {
     // Di nuovo sulla partenza: si richiude il lato da cui si arriva.
-    if (a.side < 0) next.saved = { lo: a.reach };
-    if (a.side > 0) next.saved = { hi: a.reach };
     if (a.side < 0) next.lo = a.start;
-    if (a.side > 0) next.hi = a.start;
+    else if (a.side > 0) next.hi = a.start;
+    if (a.side !== 0) next.saved = a.reach;
     return next;
   }
-  // Attraversando la partenza il lato richiuso si riapre.
-  const crossed = a.side === 0 && a.saved;
-  if (side < 0) {
-    next.lo = v;
-    if (crossed && a.saved!.hi !== undefined) next.hi = a.saved!.hi;
-    if (a.side > 0) next.hi = a.reach; // attraversata di colpo, senza passare dalla partenza
-  } else {
-    next.hi = v;
-    if (crossed && a.saved!.lo !== undefined) next.lo = a.saved!.lo;
-    if (a.side < 0) next.lo = a.reach;
-  }
   delete next.saved;
+  if (side < 0) next.lo = v;
+  else next.hi = v;
+  // Il lato opposto si riapre fin dove arrivava il dito, se lo si sta attraversando:
+  // passando dalla partenza (saved) o di colpo, senza passarci.
+  const other = a.side === 0 ? a.saved : a.side === -side ? a.reach : undefined;
+  if (other !== undefined && Math.sign(other - a.start) === -side) {
+    if (side < 0) next.hi = other;
+    else next.lo = other;
+  }
   return next;
 }
 
 export function startSelection(r: number, c: number): Selection {
   return { row: axis(r), col: axis(c) };
+}
+
+/** La casella da cui è partita la selezione. */
+export function selectionStart({ row, col }: Selection): [number, number] {
+  return [row.start, col.start];
+}
+
+/** Dove sta adesso il dito (o il cursore). */
+export function selectionAt({ row, col }: Selection): [number, number] {
+  return [row.last, col.last];
 }
 
 /** La selezione con il dito (o il cursore) sulla casella r, c. */
@@ -74,5 +81,5 @@ export function moveSelection(sel: Selection, r: number, c: number): Selection {
 }
 
 export function selectionRect({ row, col }: Selection): Rect {
-  return { r: row.lo, c: col.lo, h: row.hi - row.lo + 1, w: col.hi - col.lo + 1 };
+  return rectFromCorners(row.lo, col.lo, row.hi, col.hi);
 }
