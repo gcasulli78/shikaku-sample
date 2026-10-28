@@ -263,44 +263,49 @@ input,
 
 .clue.square::before,
 .clue.oblong::before,
-.clue.oblong::after,
 .sample.square::before,
-.sample.oblong::before,
-.sample.oblong::after {
+.sample.oblong::before {
   content: "";
   position: absolute;
   inset: 50% auto auto 50%;
   translate: -50% -50%;
-  border: 1.5px solid var(--clue-shape);
-  border-radius: 2px;
   z-index: -1;
 }
 
 .clue.square::before,
-.clue.oblong::before,
-.clue.oblong::after {
-  border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
+.sample.square::before {
+  border: 1.5px solid var(--clue-shape);
+  border-radius: 2px;
 }
 
 .clue.square::before {
+  border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
   width: 70%;
   height: 70%;
 }
 
+/* La croce è una maschera SVG colorata con --clue-shape: contorno esterno pieno,
+   linee interne (il quadrato centrale) tratteggiate. */
+.clue.oblong::before,
+.sample.oblong::before {
+  background: var(--clue-shape);
+  -webkit-mask: var(--cross) center / 100% 100% no-repeat;
+  mask: var(--cross) center / 100% 100% no-repeat;
+  --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23000' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M26 3H74V26H97V74H74V97H26V74H3V26H26Z'/%3E%3Cpath d='M26 26H74V74H26Z' stroke-width='4' stroke-dasharray='6 5'/%3E%3C/svg%3E");
+}
+
 .clue.oblong::before {
-  width: 86%;
-  height: 46%;
+  width: 90%;
+  height: 90%;
 }
 
-.clue.oblong::after {
-  width: 46%;
-  height: 86%;
-}
-
-/* Senza numero il contorno si riempie appena, per vedersi bene anche da solo. */
-.clue.open::before,
-.clue.open::after {
+/* Senza numero la figura si riempie appena, per vedersi bene anche da sola. */
+.clue.open.square::before {
   background: color-mix(in srgb, var(--clue-shape) 22%, transparent);
+}
+
+.clue.open.oblong::before {
+  --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23000' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M26 3H74V26H97V74H74V97H26V74H3V26H26Z' fill='%23000' fill-opacity='.22'/%3E%3Cpath d='M26 26H74V74H26Z' stroke-width='4' stroke-dasharray='6 5'/%3E%3C/svg%3E");
 }
 
 .clue.oblong {
@@ -324,11 +329,6 @@ input,
 
 .sample.oblong::before {
   width: 1.9em;
-  height: 1em;
-}
-
-.sample.oblong::after {
-  width: 1em;
   height: 1.9em;
 }
 
