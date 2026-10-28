@@ -6,8 +6,11 @@ export interface Rect {
   w: number;
 }
 
-/** Forma imposta da un indizio: quadrato, oppure rettangolo non quadrato. */
-export type Shape = "square" | "oblong";
+/**
+ * Forma imposta da un indizio: quadrato, rettangolo non quadrato con orientamento
+ * libero (oblong), oppure orientato: più largo che alto (wide) o più alto che largo (tall).
+ */
+export type Shape = "square" | "oblong" | "wide" | "tall";
 
 /**
  * Indizio sulla griglia: il rettangolo che lo contiene deve avere area n (se c'è)
@@ -20,13 +23,17 @@ export interface Clue {
   shape?: Shape;
 }
 
+/** La forma esatta del rettangolo (mai oblong, che vale per wide e tall insieme). */
 export function shapeOf(rect: Rect): Shape {
-  return rect.h === rect.w ? "square" : "oblong";
+  return rect.h === rect.w ? "square" : rect.w > rect.h ? "wide" : "tall";
 }
 
 /** Il rettangolo rispetta area e forma dell'indizio? */
 export function fits(clue: Clue, rect: Rect): boolean {
-  return (clue.n === undefined || clue.n === area(rect)) && (clue.shape === undefined || clue.shape === shapeOf(rect));
+  if (clue.n !== undefined && clue.n !== area(rect)) return false;
+  if (clue.shape === undefined) return true;
+  const shape = shapeOf(rect);
+  return clue.shape === "oblong" ? shape !== "square" : clue.shape === shape;
 }
 
 export type Variant = "classic" | "shapes";

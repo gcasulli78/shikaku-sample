@@ -64,6 +64,36 @@ describe("indizi con forma e area aperte", () => {
     expect(count({ r: 0, c: 0, n: 4, shape: "oblong" })).toBe(0);
   });
 
+  it("candidati orientati: orizzontale più largo che alto, verticale più alto che largo", () => {
+    expect(count({ r: 0, c: 0, shape: "wide" })).toBe(1); // 1×2
+    expect(count({ r: 0, c: 0, shape: "tall" })).toBe(1); // 2×1
+    expect(count({ r: 0, c: 0, n: 2, shape: "wide" })).toBe(1);
+    expect(count({ r: 0, c: 0, n: 4, shape: "wide" })).toBe(0); // 2×2 è un quadrato
+    // Area 6 su 6×6 dall'angolo: 1×6 e 2×3 orizzontali, 6×1 e 3×2 verticali.
+    const big = (clue: Clue) => ({ rows: 6, cols: 6, clues: [clue] });
+    const count6 = (clue: Clue) => candidatesFor(big(clue), 0, clueIndexMap(big(clue))).length;
+    expect(count6({ r: 0, c: 0, n: 6, shape: "oblong" })).toBe(4);
+    expect(count6({ r: 0, c: 0, n: 6, shape: "wide" })).toBe(2);
+    expect(count6({ r: 0, c: 0, n: 6, shape: "tall" })).toBe(2);
+    // Con un numero primo l'orientamento lascia una sola forma.
+    expect(count6({ r: 0, c: 0, n: 5, shape: "wide" })).toBe(1);
+  });
+
+  it("l'orientamento rende unica una soluzione che con la croce non lo è", () => {
+    //  ▭ .     in alto a sinistra la croce o l'orizzontale, in basso a destra un ?
+    //  . ?
+    const grid = (shape: "oblong" | "wide") => ({
+      rows: 2,
+      cols: 2,
+      clues: [{ r: 0, c: 0, shape }, { r: 1, c: 1 }],
+    });
+    // Croce: 1×2 in alto (resto: 1×2 in basso) oppure 2×1 a sinistra (resto: 2×1 a destra).
+    expect(countSolutions(grid("oblong"), 10)).toBe(2);
+    const wide = solve(grid("wide"), 2);
+    expect(wide.count).toBe(1);
+    expect(wide.solutions[0]![0]).toEqual({ r: 0, c: 0, h: 1, w: 2 });
+  });
+
   it("la forma rende unica una soluzione che con ? non lo è", () => {
     //  ? . □      il □ in alto a destra può essere solo il 2×2 a destra
     //  . . .

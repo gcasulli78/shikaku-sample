@@ -48,6 +48,7 @@ describe("partition", () => {
     const rng = createRng(1);
     for (const [rows, cols] of SIZES) {
       for (let i = 0; i < 20; i++) expectExactCover(rows, cols, partition(rows, cols, rng));
+      for (let i = 0; i < 20; i++) expectExactCover(rows, cols, partition(rows, cols, rng, undefined, true));
     }
   });
 });
@@ -117,7 +118,7 @@ describe("generate con difficoltà", () => {
     [10, 10],
   ] as const) {
     it(`variante Forme ${rows}×${cols}: ogni livello, soluzione unica e indizi aperti`, () => {
-      const open = { shape: 0, area: 0, any: 0 };
+      const open = { shape: 0, area: 0, any: 0, oriented: 0 };
       for (const difficulty of ["easy", "medium", "hard", "expert", "master"] as Difficulty[]) {
         for (let seed = 1; seed <= 2; seed++) {
           const p = generate({ rows, cols, difficulty, variant: "shapes", seed, maxCandidates: 1000 });
@@ -126,13 +127,15 @@ describe("generate con difficoltà", () => {
           expect(countSolutions(p, 2), `${difficulty} seed ${seed}`).toBe(1);
           for (const cl of p.clues) {
             if (cl.shape) open.shape++;
+            if (cl.shape === "wide" || cl.shape === "tall") open.oriented++;
             if (cl.n === undefined) open.area++;
             if (cl.n === undefined && !cl.shape) open.any++;
           }
         }
       }
-      // Tutti i tipi di indizio compaiono: forma indicata, area aperta, "?".
+      // Tutti i tipi di indizio compaiono: forma indicata, orientata, area aperta, "?".
       expect(open.shape).toBeGreaterThan(0);
+      expect(open.oriented).toBeGreaterThan(0);
       expect(open.area).toBeGreaterThan(0);
       expect(open.any).toBeGreaterThan(0);
     }, 120_000);

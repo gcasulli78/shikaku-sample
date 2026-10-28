@@ -11,6 +11,8 @@ export interface SolveResult {
   count: number;
   /** Le soluzioni trovate, una per indizio nello stesso ordine di `clues`. */
   solutions: Rect[][];
+  /** Ricerca interrotta per budget esaurito: count non è affidabile. */
+  aborted: boolean;
 }
 
 export interface Candidate {
@@ -70,11 +72,14 @@ export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int3
  * Euristiche: a ogni passo si scartano i candidati che toccano celle occupate,
  * si fallisce se una cella libera non è coperta da nessun candidato, e si ramifica
  * sulla cella coperta da meno candidati (le celle con un solo candidato sono forzate).
+ * `maxNodes` limita i passi di ricerca: con molti indizi ad area aperta, in rari casi
+ * la ricerca esplode (567 mila passi, 30 s su un 15×15 Forme).
  */
-export function solve(input: SolveInput, limit = 2): SolveResult {
+export function solve(input: SolveInput, limit = 2, maxNodes = Infinity): SolveResult {
   const { rows, cols, clues } = input;
   const total = rows * cols;
-  const result: SolveResult = { count: 0, solutions: [] };
+  const result: SolveResult = { count: 0, solutions: [], aborted: false };
+  let nodes = 0;
 
   // Con tutte le aree note la somma deve tornare esatta; con aree aperte non può superare la griglia.
   const known = clues.filter((cl) => cl.n !== undefined);
@@ -115,6 +120,10 @@ export function solve(input: SolveInput, limit = 2): SolveResult {
   };
 
   const search = (): boolean => {
+    if (++nodes > maxNodes) {
+      result.aborted = true;
+      return true;
+    }
     if (remaining === 0) {
       // Con aree aperte tutti gli indizi possono essere posati lasciando caselle scoperte.
       if (covered < total) return false;

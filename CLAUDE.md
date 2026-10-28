@@ -29,7 +29,11 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 ## Variante Forme
 
 - `Clue` ha `n` e `shape` opzionali (`types.ts`): senza `n` l'area è aperta, senza `shape` la forma è libera, senza nessuno dei due è un `?`. Ogni controllo su un rettangolo passa da `fits(clue, rect)`.
-- `oblong` vuol dire "non quadrato", orizzontale **o** verticale. Il simbolo (scelto dall'utente) è una croce: contorno esterno pieno e linee interne tratteggiate, una maschera SVG in `style.css`. Un rettangolino orizzontale da solo sembrava imporre l'orientamento.
+- Forme possibili: `square`, `oblong` (non quadrato, orizzontale **o** verticale), `wide` (più largo che alto), `tall` (più alto che largo). `shapeOf` restituisce sempre quella esatta (mai `oblong`); `fits` accetta `oblong` per `wide` e `tall`.
+- Simboli (scelti dall'utente): `oblong` è una croce, con contorno esterno pieno e linee interne tratteggiate (maschera SVG in `style.css`); `wide` e `tall` sono un rettangolino orizzontale o verticale. Un rettangolino orizzontale per `oblong` sembrava imporre l'orientamento.
+- `ORIENTED` (`generator.ts`) dà per livello la probabilità che un indizio con forma sia orientato: più alta ai livelli bassi, 0 a Maestro. L'orientamento non si rivela in `reveal` (rendeva Esperto e Maestro troppo facili).
+- La partizione riga per riga favorisce i rettangoli verticali (sul 15×15 4 puzzle su 5 quasi tutti verticali). Nelle Forme, ai livelli con indizi orientati, si usa la partizione bilanciata: si ammettono solo forme che ci starebbero anche ruotate, e gli orizzontali pesano `WIDE_WEIGHT`. Classico e Maestro usano quella originale.
+- Il solver ha un budget di nodi (`maxNodes`), usato dal generatore (`SOLVE_BUDGET`): con molti indizi ad area aperta la ricerca poteva esplodere (30 s). Se il budget finisce, quella partizione si scarta.
 - Con aree aperte la somma dei numeri non garantisce più la copertura: il solver verifica che tutte le caselle siano coperte prima di contare una soluzione.
 - Il generatore sceglie il tipo di indizio con `SHAPE_KINDS` (pesi per livello); per rendere unica la soluzione prima **rivela** un'informazione, poi sposta l'indizio. Nel Classico la sequenza casuale è identica a prima (stessi puzzle per seed).
 - Il valutatore ha un budget di passi (`WORK_BUDGET`): con molti indizi aperti le ipotesi profonde esplodevano fino a 10 s per valutazione. Finito il budget il puzzle risulta "non risolto", senza scartare forme a torto.

@@ -38,7 +38,9 @@ La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il D
 | `6` | area 6, forma qualsiasi |
 | `□ 4` | quadrato di area 4 (2×2) |
 | `▭ 6` | rettangolo non quadrato di area 6, orizzontale o verticale (nel gioco il simbolo è una croce con le linee interne tratteggiate) |
-| `□` / `▭` | forma fissa, area qualsiasi |
+| `▬ 6` | rettangolo orizzontale (più largo che alto) di area 6: 1×6 o 2×3 |
+| `▮ 6` | rettangolo verticale (più alto che largo) di area 6: 6×1 o 3×2 |
+| `□` / `▭` / `▬` / `▮` | forma fissa, area qualsiasi |
 | `?` | forma e area qualsiasi |
 
 ## Difficoltà

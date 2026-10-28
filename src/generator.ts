@@ -90,13 +90,31 @@ function pickWeighted<T>(rng: Rng, items: readonly T[], weight: (item: T) => num
   return items[items.length - 1]!;
 }
 
-/** Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi. */
-export function partition(rows: number, cols: number, rng: Rng, profile: Profile = PROFILES.medium): Rect[] {
+/**
+ * Peso in più dei rettangoli orizzontali nella partizione bilanciata: compensa le strisce
+ * larghe una colonna, dove ci stanno solo verticali. Con 2 il rapporto orizzontali/verticali
+ * è 0.94–1.21 su 8×8, 10×10, 15×15 e 8×15 (misurato, 200 partizioni per griglia).
+ */
+const WIDE_WEIGHT = 2;
+
+/**
+ * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi.
+ * `balanced`: tanti orizzontali quanti verticali (vedi layout).
+ */
+export function partition(
+  rows: number,
+  cols: number,
+  rng: Rng,
+  profile: Profile = PROFILES.medium,
+  balanced = false,
+): Rect[] {
   const maxArea = maxAreaFor(rows, cols, profile);
   const used = new Uint8Array(rows * cols);
   const rects: Rect[] = [];
   const shapeWeight = (o: Rect) =>
-    Math.pow(area(o), profile.sizeExp) * (1 + (profile.compositeBonus * (divisorCount(area(o)) - 2)) / 2);
+    Math.pow(area(o), profile.sizeExp) *
+    (1 + (profile.compositeBonus * (divisorCount(area(o)) - 2)) / 2) *
+    (balanced && o.w > o.h ? WIDE_WEIGHT : 1);
 
   for (let idx = 0; idx < rows * cols; idx++) {
     if (used[idx]) continue;
@@ -121,7 +139,11 @@ export function partition(rows: number, cols: number, rng: Rng, profile: Profile
       }
     }
 
-    const bigger = options.filter((o) => area(o) > 1);
+    // Bilanciata: solo le forme che ci starebbero anche ruotate, così orizzontali e verticali
+    // hanno le stesse possibilità (se resta qualcosa oltre al 1×1).
+    const fit = balanced ? new Set(options.map((o) => o.h * 100 + o.w)) : undefined;
+    const symmetric = fit ? options.filter((o) => area(o) > 1 && fit.has(o.w * 100 + o.h)) : [];
+    const bigger = symmetric.length > 0 ? symmetric : options.filter((o) => area(o) > 1);
     const rect =
       bigger.length > 0 && rng() >= SINGLE_CELL_CHANCE ? pickWeighted(rng, bigger, shapeWeight) : pick(rng, options);
     for (let rr = rect.r; rr < rect.r + rect.h; rr++) {
@@ -189,16 +211,23 @@ export const SHAPE_KINDS: Record<Difficulty, readonly number[]> = {
 };
 const CLASSIC_KINDS: readonly number[] = [1, 0, 0, 0];
 
-function kindOf(clue: Clue): Kind {
-  if (clue.n === undefined) return clue.shape ? "shape" : "any";
-  return clue.shape ? "shapeNumber" : "number";
-}
+/**
+ * Probabilità che un indizio con forma non quadrata dica anche l'orientamento
+ * (orizzontale o verticale) invece della croce: l'orientamento dimezza le forme
+ * possibili, quindi pesa di più ai livelli bassi. Misurato sul 15×15 (16 seed):
+ * Difficile a 0.3 scende a 15/16, Maestro a 0.15 a 10/16; con questi valori 16/16
+ * (Maestro 15/16, come prima degli indizi orientati).
+ */
+export const ORIENTED: Record<Difficulty, number> = { easy: 0.5, medium: 0.4, hard: 0.15, expert: 0.15, master: 0 };
 
 /** L'indizio del rettangolo nella cella data, con le informazioni del tipo scelto. */
-function dress(cell: { r: number; c: number }, rect: Rect, kind: Kind): Clue {
+function dress(cell: { r: number; c: number }, rect: Rect, kind: Kind, s: Setup): Clue {
   const clue: Clue = { r: cell.r, c: cell.c };
   if (kind === "number" || kind === "shapeNumber") clue.n = area(rect);
-  if (kind === "shape" || kind === "shapeNumber") clue.shape = shapeOf(rect);
+  if (kind === "shape" || kind === "shapeNumber") {
+    const shape = shapeOf(rect);
+    clue.shape = shape !== "square" && s.rng() >= s.oriented ? "oblong" : shape;
+  }
   return clue;
 }
 
@@ -218,12 +247,14 @@ interface Setup {
   rng: Rng;
   profile: Profile;
   kinds: readonly number[];
+  /** Probabilità di un indizio orientato (ORIENTED), 0 nel Classico. */
+  oriented: number;
 }
 
 function placeClue(rect: Rect, s: Setup): Clue {
   const cell = pickCell(rect, s.rng, s.profile);
   // Nel Classico niente estrazione del tipo: stessa sequenza casuale (e stessi puzzle per seed) di prima.
-  return dress(cell, rect, s.kinds === CLASSIC_KINDS ? "number" : pickKind(s));
+  return dress(cell, rect, s.kinds === CLASSIC_KINDS ? "number" : pickKind(s), s);
 }
 
 function pickKind(s: Setup): Kind {
@@ -234,17 +265,37 @@ function pickKind(s: Setup): Kind {
 function relocate(clue: Clue, rect: Rect, s: Setup): Clue {
   let cell = pickCell(rect, s.rng, s.profile);
   for (let k = 0; k < 4 && cell.r === clue.r && cell.c === clue.c; k++) cell = pickCell(rect, s.rng, s.profile);
-  return dress(cell, rect, kindOf(clue));
+  return { ...clue, r: cell.r, c: cell.c };
 }
 
 /**
  * Lo stesso indizio con un'informazione in più (prima il numero, poi la forma, solo
- * nella variante Forme); undefined se è già completo.
+ * nella variante Forme); undefined se è già completo. L'orientamento non si rivela:
+ * rende i puzzle troppo facili e Esperto/Maestro sul 15×15 scendevano a 14/16 (misurato).
  */
 function reveal(clue: Clue, rect: Rect, s: Setup): Clue | undefined {
   if (clue.n === undefined) return { ...clue, n: area(rect) };
-  if (s.kinds !== CLASSIC_KINDS && clue.shape === undefined && clue.n > 1) return { ...clue, shape: shapeOf(rect) };
+  if (s.kinds !== CLASSIC_KINDS && clue.shape === undefined && clue.n > 1) {
+    const shape = shapeOf(rect);
+    return { ...clue, shape: shape === "square" ? shape : "oblong" };
+  }
   return undefined;
+}
+
+/**
+ * Passi massimi del solver durante la generazione: di solito ne bastano meno di 1000
+ * (il 99,9% su 16 mila controlli misurati), un 15×15 Forme ne ha chiesti 567 mila (30 s).
+ */
+const SOLVE_BUDGET = 20_000;
+
+/**
+ * Il riempimento riga per riga favorisce i rettangoli verticali (0.23 orizzontali per
+ * verticale sul 15×15, e 4 puzzle su 5 quasi tutti verticali): dove l'orientamento si
+ * vede negli indizi la partizione è bilanciata. Altrove (Classico, Maestro) resta com'era:
+ * la bilanciata ha pezzi più piccoli e Maestro sul 15×15 scendeva a 10/16 (misurato).
+ */
+function layout(s: Setup): Rect[] {
+  return partition(s.rows, s.cols, s.rng, s.profile, s.oriented > 0);
 }
 
 /**
@@ -257,13 +308,15 @@ function generateUnique(s: Setup, maxAttempts: number, maxFixes: number) {
   const { rows, cols } = s;
   let fallback: { clues: Clue[]; solution: Rect[]; unique: boolean } | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const solution = partition(rows, cols, s.rng, s.profile);
+    const solution = layout(s);
     const clues = solution.map((rect) => placeClue(rect, s));
 
     for (let fix = 0; fix <= maxFixes; fix++) {
-      const { count, solutions } = solve({ rows, cols, clues }, 2);
-      if (count === 1) return { clues, solution, unique: true };
+      const { count, solutions, aborted } = solve({ rows, cols, clues }, 2, SOLVE_BUDGET);
+      if (!aborted && count === 1) return { clues, solution, unique: true };
       fallback ??= { clues: clues.map((cl) => ({ ...cl })), solution, unique: false };
+      // Ricerca troppo lunga: unicità non verificabile, meglio un'altra partizione.
+      if (aborted) break;
 
       const alternative = solutions.find((sol) => !sol.every((rect, i) => sameRect(rect, solution[i]!)));
       if (!alternative) break;
@@ -310,14 +363,15 @@ function tune(s: Setup, clues: Clue[], solution: Rect[], targetLevel: number, mo
     const previous = clues[i]!;
     const rect = solution[i]!;
     const changeKind = shapes && (area(rect) === 1 || rng() < 0.5);
-    const moved = dress(changeKind ? previous : pickCell(rect, rng, s.profile), rect, changeKind ? pickKind(s) : kindOf(previous));
-    if (moved.r === previous.r && moved.c === previous.c && kindOf(moved) === kindOf(previous)) continue;
+    const moved = changeKind ? dress(previous, rect, pickKind(s), s) : { ...previous, ...pickCell(rect, rng, s.profile) };
+    if (moved.r === previous.r && moved.c === previous.c && moved.n === previous.n && moved.shape === previous.shape) continue;
     clues[i] = moved;
     // Il valutatore scarta solo forme impossibili: se chiude il puzzle, la soluzione è unica
     // e il solver serve solo quando non ci arriva.
     const measured = measure(rows, cols, clues, targetLevel);
     const unsolved = measured.level === DIFFICULTIES.length;
-    const next = !unsolved || solve({ rows, cols, clues }, 2).count === 1 ? measured : undefined;
+    const check = unsolved ? solve({ rows, cols, clues }, 2, SOLVE_BUDGET) : undefined;
+    const next = !check || (!check.aborted && check.count === 1) ? measured : undefined;
     if (next && cost(next) <= cost(current)) current = next;
     else clues[i] = previous;
   }
@@ -344,6 +398,7 @@ export function generate(options: GenerateOptions): GenerateResult {
     rng,
     profile: PROFILES[target],
     kinds: options.variant === "shapes" ? SHAPE_KINDS[target] : CLASSIC_KINDS,
+    oriented: options.variant === "shapes" ? ORIENTED[target] : 0,
   };
   const deadline = options.timeLimitMs === undefined ? Infinity : Date.now() + options.timeLimitMs;
   const outOfTime = () => Date.now() > deadline;

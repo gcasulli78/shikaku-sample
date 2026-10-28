@@ -252,19 +252,28 @@ input,
   pointer-events: none;
 }
 
-/* Forme: il contorno dietro il numero dice quadrato o rettangolo non quadrato.
-   Il rettangolo è disegnato incrociato (orizzontale + verticale): l'orientamento è libero. */
+/* Forme: il contorno dietro il numero dice la forma. Quadrato, rettangolo orizzontale e
+   verticale sono un contorno semplice; il non quadrato a orientamento libero è una croce
+   (orizzontale + verticale insieme). */
 .clue.square,
 .clue.oblong,
+.clue.wide,
+.clue.tall,
 .sample.square,
-.sample.oblong {
+.sample.oblong,
+.sample.wide,
+.sample.tall {
   position: relative;
 }
 
 .clue.square::before,
 .clue.oblong::before,
+.clue.wide::before,
+.clue.tall::before,
 .sample.square::before,
-.sample.oblong::before {
+.sample.oblong::before,
+.sample.wide::before,
+.sample.tall::before {
   content: "";
   position: absolute;
   inset: 50% auto auto 50%;
@@ -273,15 +282,35 @@ input,
 }
 
 .clue.square::before,
-.sample.square::before {
+.clue.wide::before,
+.clue.tall::before,
+.sample.square::before,
+.sample.wide::before,
+.sample.tall::before {
   border: 1.5px solid var(--clue-shape);
   border-radius: 2px;
 }
 
-.clue.square::before {
+.clue.square::before,
+.clue.wide::before,
+.clue.tall::before {
   border-width: max(1.5px, calc(100cqw / var(--cols) * 0.05));
+}
+
+.clue.square::before {
   width: 70%;
   height: 70%;
+}
+
+.clue.wide::before {
+  width: 90%;
+  height: 54%;
+}
+
+/* Più largo di metà cella, perché ci stiano i numeri a due cifre. */
+.clue.tall::before {
+  width: 60%;
+  height: 90%;
 }
 
 /* La croce è una maschera SVG colorata con --clue-shape: contorno esterno pieno,
@@ -300,7 +329,9 @@ input,
 }
 
 /* Senza numero la figura si riempie appena, per vedersi bene anche da sola. */
-.clue.open.square::before {
+.clue.open.square::before,
+.clue.open.wide::before,
+.clue.open.tall::before {
   background: color-mix(in srgb, var(--clue-shape) 22%, transparent);
 }
 
@@ -308,7 +339,9 @@ input,
   --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23000' stroke-width='6' stroke-linejoin='round'%3E%3Cpath d='M26 3H74V26H97V74H74V97H26V74H3V26H26Z' fill='%23000' fill-opacity='.22'/%3E%3Cpath d='M26 26H74V74H26Z' stroke-width='4' stroke-dasharray='6 5'/%3E%3C/svg%3E");
 }
 
-.clue.oblong {
+.clue.oblong,
+.clue.wide,
+.clue.tall {
   font-size: calc(100cqw / var(--cols) * 0.4);
 }
 
@@ -332,14 +365,33 @@ input,
   height: 1.9em;
 }
 
-.sample.oblong {
+.sample.wide::before {
+  width: 1.9em;
+  height: 1.1em;
+}
+
+.sample.tall::before {
+  width: 1.25em;
+  height: 1.9em;
+}
+
+.sample.oblong,
+.sample.tall {
   height: 1.9em;
 }
 
 .sample.square,
-.sample.oblong {
+.sample.oblong,
+.sample.wide,
+.sample.tall {
   isolation: isolate;
   min-width: 2em;
+}
+
+/* Ogni voce della legenda resta intera: si va a capo solo tra una voce e l'altra. */
+.legend .item {
+  white-space: nowrap;
+  margin: 0 0.35em;
 }
 
 .legend[hidden] {

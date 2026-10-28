@@ -84,6 +84,20 @@ describe("Game", () => {
     expect(game.intent({ r: 1, c: 0, h: 1, w: 1 })).toBe("none"); // ▭4 no
   });
 
+  it("Forme: orientamento sbagliato è un errore certo, e niente 1×1", () => {
+    //  ▭6 orizzontale nell'angolo di una griglia 3×6
+    const wide6: Puzzle = { rows: 3, cols: 6, clues: [{ r: 0, c: 0, n: 6, shape: "wide" }], solution: [] };
+    const game = new Game(wide6);
+    expect(game.status({ r: 0, c: 0, h: 2, w: 3 })).toBe("valid");
+    expect(game.status({ r: 0, c: 0, h: 1, w: 6 })).toBe("valid");
+    expect(game.status({ r: 0, c: 0, h: 3, w: 2 })).toBe("bad"); // verticale
+    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("open"); // può ancora allargarsi
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("none");
+    const tall: Puzzle = { rows: 3, cols: 3, clues: [{ r: 0, c: 0, shape: "tall" }], solution: [] };
+    expect(new Game(tall).isValid({ r: 0, c: 0, h: 3, w: 1 })).toBe(true);
+    expect(new Game(tall).isValid({ r: 0, c: 0, h: 1, w: 3 })).toBe(false);
+  });
+
   it("Forme: area giusta ma forma sbagliata è un errore certo", () => {
     const square4: Puzzle = { rows: 2, cols: 4, clues: [{ r: 0, c: 0, n: 4, shape: "square" }], solution: [] };
     expect(new Game(square4).status({ r: 0, c: 0, h: 1, w: 4 })).toBe("bad");

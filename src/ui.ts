@@ -17,6 +17,7 @@ import {
   type Clue,
   type Difficulty,
   type Rect,
+  type Shape,
   type Size,
   type Variant,
 } from "./types";
@@ -52,9 +53,16 @@ function variantLabel(v: Variant): string {
   return VARIANTS.find((x) => x.id === v)!.label;
 }
 
+const SHAPE_LABELS: Record<Shape, string> = {
+  square: "quadrato",
+  oblong: "rettangolo non quadrato",
+  wide: "rettangolo orizzontale",
+  tall: "rettangolo verticale",
+};
+
 /** Descrizione dell'indizio per i lettori di schermo. */
 function clueLabel(clue: Clue): string {
-  const shape = clue.shape === "square" ? "quadrato" : clue.shape === "oblong" ? "rettangolo non quadrato" : "forma libera";
+  const shape = clue.shape ? SHAPE_LABELS[clue.shape] : "forma libera";
   return `${shape}, ${clue.n !== undefined ? `${clue.n} caselle` : "caselle libere"}`;
 }
 
