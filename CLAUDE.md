@@ -29,6 +29,7 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 ## Variante Forme
 
 - `Clue` ha `n` e `shape` opzionali (`types.ts`): senza `n` l'area è aperta, senza `shape` la forma è libera, senza nessuno dei due è un `?`. Ogni controllo su un rettangolo passa da `fits(clue, rect)`.
+- `oblong` vuol dire "non quadrato", orizzontale **o** verticale. Il simbolo (scelto dall'utente) è una croce: contorno esterno pieno e linee interne tratteggiate, una maschera SVG in `style.css`. Un rettangolino orizzontale da solo sembrava imporre l'orientamento.
 - Con aree aperte la somma dei numeri non garantisce più la copertura: il solver verifica che tutte le caselle siano coperte prima di contare una soluzione.
 - Il generatore sceglie il tipo di indizio con `SHAPE_KINDS` (pesi per livello); per rendere unica la soluzione prima **rivela** un'informazione, poi sposta l'indizio. Nel Classico la sequenza casuale è identica a prima (stessi puzzle per seed).
 - Il valutatore ha un budget di passi (`WORK_BUDGET`): con molti indizi aperti le ipotesi profonde esplodevano fino a 10 s per valutazione. Finito il budget il puzzle risulta "non risolto", senza scartare forme a torto.
