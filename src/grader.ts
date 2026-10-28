@@ -243,6 +243,21 @@ function initialState(input: SolveInput): State {
   };
 }
 
+/** Posa un rettangolo se è una forma possibile del suo numero; false altrimenti. */
+function placeRect(s: State, rect: Rect): boolean {
+  const i = s.cands.findIndex((list, j) => !s.placed[j] && list.some((cand) => sameRect(cand.rect, rect)));
+  if (i < 0) return false;
+  place(s, i, s.cands[i]!.find((cand) => sameRect(cand.rect, rect))!);
+  return true;
+}
+
+/** Lo stato iniziale con i pezzi già posati (corretti). */
+function stateWith(input: SolveInput, given: readonly Rect[]): State {
+  const s = initialState(input);
+  for (const rect of given) placeRect(s, rect);
+  return s;
+}
+
 /** maxLevel limita le regole usate: oltre, il puzzle risulta non risolto. */
 export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): GradeResult {
   const total = input.rows * input.cols;
@@ -284,11 +299,7 @@ export interface Deduction {
  */
 export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduction | undefined {
   const total = input.rows * input.cols;
-  const s = initialState(input);
-  for (const rect of given) {
-    const i = s.cands.findIndex((list, j) => !s.placed[j] && list.some((cand) => sameRect(cand.rect, rect)));
-    if (i >= 0) place(s, i, s.cands[i]!.find((cand) => sameRect(cand.rect, rect))!);
-  }
+  const s = stateWith(input, given);
   const why = new Map<number, Omit<Deduction, "clue" | "rect">>();
   const cells = new Map<number, number>();
   const by = new Map<number, number>();
@@ -320,4 +331,35 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduct
     }
     if (!progress) return undefined;
   }
+}
+
+/** Perché uno stato è impossibile: un numero senza più forme, o una cella che nessuno copre. */
+export type Conflict = { kind: "starved"; clue: number } | { kind: "uncovered"; cell: number };
+
+function conflictIn(s: State, total: number): Conflict | undefined {
+  const starved = s.cands.findIndex((list, i) => !s.placed[i] && list.length === 0);
+  if (starved >= 0) return { kind: "starved", clue: starved };
+  const covered = new Uint8Array(total);
+  s.cands.forEach((list, i) => {
+    if (!s.placed[i]) for (const cand of list) for (const idx of cand.cells) covered[idx] = 1;
+  });
+  const cell = covered.findIndex((c, idx) => !c && !s.occupied[idx]);
+  return cell >= 0 ? { kind: "uncovered", cell } : undefined;
+}
+
+/**
+ * Perché rect (che rispetta il suo indizio) è sbagliato: posato sopra ai pezzi corretti
+ * given, la contraddizione a cui si arriva subito, o con le regole fino a Difficile (la
+ * più semplice). undefined se non se ne trova una così semplice.
+ */
+export function conflictOf(input: SolveInput, given: readonly Rect[], rect: Rect): Conflict | undefined {
+  const total = input.rows * input.cols;
+  for (let maxLevel = -1; maxLevel <= 2; maxLevel++) {
+    const s = stateWith(input, given);
+    if (!placeRect(s, rect)) return undefined;
+    const contradiction =
+      maxLevel < 0 ? isContradiction(s, total) : propagate(s, total, maxLevel, DIFFICULTIES.map(() => 0), { done: 0 }) === "contradiction";
+    if (contradiction) return conflictIn(s, total);
+  }
+  return undefined;
 }

@@ -1,4 +1,4 @@
-import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame } from "./game";
+import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame, type WrongReason } from "./game";
 import { generate, type GenerateOptions, type GenerateResult } from "./generator";
 import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
 import { encodePuzzle, puzzleFromCode } from "./share";
@@ -88,6 +88,10 @@ function clueName(clue: Clue, prep: "" | "di" | "a" = ""): string {
   return `${article}${noun}${clue.shape ? ` ${SHAPE_WORDS[clue.shape]}` : ""}`;
 }
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Perché il pezzo suggerito è obbligato, a parole. */
 function reasonText(reason: Reason | undefined): string {
   if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
@@ -101,13 +105,61 @@ function reasonText(reason: Reason | undefined): string {
     guess: `Provando le altre forme ${of} si arriva a una contraddizione.`,
     deep: `Provando le altre forme ${of} si arriva a una contraddizione, dopo qualche passo.`,
   }[reason.rule];
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return capitalize(text);
+}
+
+/** Cosa chiede la forma di un indizio, per spiegare un rettangolo della forma sbagliata. */
+const SHAPE_NEEDS: Record<Shape, string> = {
+  square: "un quadrato",
+  oblong: "un rettangolo non quadrato",
+  wide: "un rettangolo più largo che alto",
+  tall: "un rettangolo più alto che largo",
+};
+
+/** Perché il rettangolo (evidenziato) è sbagliato, a parole. */
+function wrongText(why: WrongReason, rect: Rect): string {
+  switch (why.kind) {
+    case "empty":
+      return "non contiene nessun indizio";
+    case "many":
+      return `contiene ${why.count} indizi`;
+    case "area":
+      return `${clueName(why.clue)} vuole ${why.clue.n} caselle, qui ce ne sono ${area(rect)}`;
+    case "shape":
+      return `${clueName(why.clue)} vuole ${SHAPE_NEEDS[why.clue.shape!]}`;
+    case "starved":
+      return `così ${clueName(why.clue)} non avrebbe più spazio`;
+    case "uncovered":
+      return "così la casella evidenziata non la potrebbe coprire nessun indizio";
+    case "other":
+      return "non fa parte della soluzione";
+  }
 }
 
 function hintText(hint: Hint): string {
-  if ("removed" in hint) return hint.removed.length === 1 ? "Tolto un rettangolo sbagliato." : "Tolti i rettangoli sbagliati.";
+  if ("removed" in hint) {
+    const why = wrongText(hint.wrong.why, hint.wrong.rect);
+    return hint.removed.length === 1
+      ? `Tolto un rettangolo sbagliato: ${why}.`
+      : `Tolti ${hint.removed.length} rettangoli sbagliati. Quello evidenziato: ${why}.`;
+  }
+  if ("focus" in hint) return `Guarda ${clueName(hint.focus.clue)}: si può già capire dove va.`;
+  if ("explain" in hint) return reasonText(hint.explain);
   return reasonText(hint.reason);
 }
+
+/** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva. */
+function hintSpots(hint: Hint): { r: number; c: number }[] {
+  if ("removed" in hint) {
+    const { why } = hint.wrong;
+    return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
+  }
+  if ("focus" in hint) return [hint.focus.clue];
+  const reason = "explain" in hint ? hint.explain : hint.reason;
+  return reason ? [reason.cell, reason.clue, reason.by].filter((spot) => spot !== undefined) : [];
+}
+
+const HINT_LABELS = ["Suggerimento", "Perché?", "Mostra il pezzo"];
 
 /**
  * Genera nel Worker; se non si può creare (browser vecchi), nel thread principale.
@@ -281,6 +333,7 @@ export function startApp(): void {
   const winText = $<HTMLParagraphElement>("win-text");
   const winRecord = $<HTMLParagraphElement>("win-record");
   const shareBtn = $<HTMLButtonElement>("share");
+  const checkBtn = $<HTMLButtonElement>("check");
   const recordsBtn = $<HTMLButtonElement>("records-btn");
   const recordsDialog = $<HTMLDialogElement>("records");
   const recordsBody = $<HTMLDivElement>("records-body");
@@ -536,7 +589,8 @@ export function startApp(): void {
       board.append(el);
     });
 
-    // Il suggerimento ha tolto rettangoli sbagliati: li mostra mentre svaniscono.
+    // Il suggerimento ha tolto rettangoli sbagliati: li mostra mentre svaniscono, e resta
+    // il contorno di quello spiegato.
     if (lastHint && "removed" in lastHint) {
       for (const rect of lastHint.removed) {
         const el = document.createElement("div");
@@ -544,12 +598,16 @@ export function startApp(): void {
         gridArea(el, rect);
         board.append(el);
       }
+      if (lastHint.removed.length > 1) {
+        const el = document.createElement("div");
+        el.className = "hint-mark wrong";
+        gridArea(el, lastHint.wrong.rect);
+        board.append(el);
+      }
     }
 
     // Il motivo del suggerimento: la casella decisiva e gli indizi coinvolti lampeggiano.
-    const reason = lastHint && "placed" in lastHint ? lastHint.reason : undefined;
-    for (const spot of [reason?.cell, reason?.clue, reason?.by]) {
-      if (!spot) continue;
+    for (const spot of lastHint ? hintSpots(lastHint) : []) {
       const el = document.createElement("div");
       el.className = "hint-mark";
       el.style.gridArea = `${spot.r + 1} / ${spot.c + 1}`;
@@ -572,6 +630,8 @@ export function startApp(): void {
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
     hintBtn.disabled = solved;
+    hintBtn.textContent = HINT_LABELS[game.hintStage]!;
+    checkBtn.disabled = solved || game.placed.length === 0;
     shareBtn.disabled = false;
     renderTimer();
   };
@@ -602,9 +662,13 @@ export function startApp(): void {
       const time = timer.elapsed();
       winText.textContent =
         `${difficultyLabel(difficulty)}${variant} · tempo ${formatTime(time)}` +
-        (game.hintsUsed > 0 ? ` · ${game.hintsUsed} suggeriment${game.hintsUsed === 1 ? "o" : "i"}` : " · senza suggerimenti");
+        (game.hintsUsed > 0
+          ? ` · ${game.hintsUsed} suggeriment${game.hintsUsed === 1 ? "o" : "i"}`
+          : game.helped
+            ? " · con qualche aiuto"
+            : " · senza aiuti");
       const { rows, cols } = game.puzzle;
-      const { best, bestClean } = recordWin(records, recordKey({ rows, cols, difficulty, variant: gameVariant }), time, game.hintsUsed === 0);
+      const { best, bestClean } = recordWin(records, recordKey({ rows, cols, difficulty, variant: gameVariant }), time, !game.helped);
       writeJson(RECORDS_KEY, records);
       winRecord.hidden = !best && !bestClean;
       winRecord.textContent = bestClean && !best ? "Nuovo record senza aiuti!" : "Nuovo record!";
@@ -687,6 +751,14 @@ export function startApp(): void {
     lastHint = game.hint();
     notice = undefined;
     afterMove();
+  });
+  checkBtn.addEventListener("click", () => {
+    const wrong = game.check();
+    notice =
+      wrong === 0 ? "Finora è tutto giusto." : wrong === 1 ? "C'è un rettangolo sbagliato." : `Ci sono ${wrong} rettangoli sbagliati.`;
+    lastHint = undefined;
+    save();
+    render();
   });
 
   // --- Condividere ---

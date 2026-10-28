@@ -30,6 +30,11 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 
 La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il DOM ed è coperta dai test in `tests/`.
 
+## Aiuti
+
+- **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 vuole 8 caselle, qui ce ne sono 6" o "così il 4 non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati.
+- **Verifica**: dice solo se ci sono errori e quanti, senza indicarli.
+
 ## Partite, record e link
 
 - La partita in corso si salva nel browser a ogni mossa: riaprendo la pagina si riprende da lì, con il tempo trascorso.

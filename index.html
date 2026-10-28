@@ -12,6 +12,9 @@
       <header class="top">
         <h1>Shikaku</h1>
         <span class="timer" id="timer" aria-label="Tempo">0:00</span>
+        <button type="button" class="icon-btn" id="share" title="Condividi questo puzzle" aria-label="Condividi questo puzzle" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="records-btn" title="Record" aria-label="Record">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8M9 18h6"/></svg>
         </button>
@@ -55,7 +58,7 @@
         <button type="button" class="btn" id="undo" title="Annulla (Ctrl+Z)" disabled>Annulla</button>
         <button type="button" class="btn" id="clear" disabled>Cancella</button>
         <button type="button" class="btn" id="hint" disabled>Suggerimento</button>
-        <button type="button" class="btn" id="share" disabled>Condividi</button>
+        <button type="button" class="btn" id="check" disabled>Verifica</button>
       </section>
 
       <p class="help legend" id="legend" hidden>
@@ -70,7 +73,8 @@
       <p class="help">
         Trascina per disegnare un rettangolo: deve contenere un solo indizio ed avere tante caselle quanto il suo numero.
         I rettangoli non possono sovrapporsi: tocca un rettangolo per toglierlo, tocca un 1 per chiuderlo.
-        Il suggerimento toglie prima i rettangoli sbagliati, poi aggiunge un pezzo a cui si arriva ragionando e spiega perché.
+        Il suggerimento toglie prima i rettangoli sbagliati spiegando perché, poi aiuta a gradi: l'indizio da guardare, il ragionamento, il pezzo.
+        Verifica dice solo se ci sono errori.
       </p>
     </main>
 

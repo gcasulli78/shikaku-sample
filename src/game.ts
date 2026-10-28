@@ -1,4 +1,4 @@
-import { nextDeduction, type Rule } from "./grader";
+import { conflictOf, nextDeduction, type Rule } from "./grader";
 import { area, contains, fits, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
 
 /** Un'azione annullabile: rettangoli tolti e aggiunti insieme. */
@@ -19,21 +19,47 @@ export interface Reason {
 }
 
 /**
- * Esito di un suggerimento: rettangoli sbagliati tolti oppure un pezzo corretto posato,
- * con il motivo (senza motivo se le regole del valutatore non bastavano).
+ * Perché un rettangolo è sbagliato: niente indizi o più di uno, area o forma che non
+ * rispettano l'indizio, oppure posandolo un indizio resta senza spazio o una casella
+ * senza copertura (other: la contraddizione non è così semplice).
  */
-export type Hint = { removed: Rect[] } | { placed: Rect; reason?: Reason };
+export type WrongReason =
+  | { kind: "empty" }
+  | { kind: "many"; count: number }
+  | { kind: "area" | "shape"; clue: Clue }
+  | { kind: "starved"; clue: Clue }
+  | { kind: "uncovered"; cell: { r: number; c: number } }
+  | { kind: "other" };
+
+/**
+ * Esito di un suggerimento, a gradi: prima l'indizio su cui ragionare (focus), poi il
+ * motivo (explain), poi il pezzo posato (placed). Se ci sono rettangoli sbagliati si
+ * tolgono tutti, spiegando il primo. Un pezzo posato senza motivo viene dalla soluzione,
+ * quando le regole del valutatore non bastano.
+ */
+export type Hint =
+  | { removed: Rect[]; wrong: { rect: Rect; why: WrongReason } }
+  | { focus: Reason }
+  | { explain: Reason }
+  | { placed: Rect; reason?: Reason };
 
 export interface SavedGame {
   rects: Rect[];
   hintsUsed: number;
+  /** Usato un aiuto qualsiasi (anche solo un grado del suggerimento o la verifica). */
+  helped?: boolean;
 }
 
 export class Game {
   readonly puzzle: Puzzle;
   private rects: Rect[] = [];
   private history: Action[] = [];
+  /** Pezzi posati o errori tolti dal suggerimento. */
   hintsUsed = 0;
+  /** Usato un aiuto qualsiasi: vale per il record "senza aiuti". */
+  helped = false;
+  /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
+  private pending: { rect: Rect; reason: Reason; stage: 1 | 2 } | undefined;
 
   constructor(puzzle: Puzzle) {
     this.puzzle = puzzle;
@@ -41,7 +67,7 @@ export class Game {
 
   /** Lo stato da salvare: rettangoli posati e suggerimenti usati (la cronologia di Annulla no). */
   snapshot(): SavedGame {
-    return { rects: this.rects.map((rect) => ({ ...rect })), hintsUsed: this.hintsUsed };
+    return { rects: this.rects.map((rect) => ({ ...rect })), hintsUsed: this.hintsUsed, helped: this.helped };
   }
 
   /** Riprende una partita salvata; i rettangoli che si sovrappongono si scartano. */
@@ -49,6 +75,7 @@ export class Game {
     const game = new Game(puzzle);
     for (const rect of saved.rects) if (game.canPlace(rect)) game.rects.push({ ...rect });
     game.hintsUsed = saved.hintsUsed;
+    game.helped = saved.helped ?? saved.hintsUsed > 0;
     return game;
   }
 
@@ -122,6 +149,7 @@ export class Game {
   undo(): void {
     const action = this.history.pop();
     if (!action) return;
+    this.pending = undefined;
     this.rects = this.rects.filter((rect) => !action.added.includes(rect));
     this.rects.push(...action.removed);
   }
@@ -131,35 +159,79 @@ export class Game {
     return this.rects.filter((rect) => !this.puzzle.solution.some((sol) => sameRect(rect, sol)));
   }
 
+  /** Quanti dei rettangoli posati sono sbagliati, senza dire quali (pulsante Verifica). */
+  check(): number {
+    this.helped = true;
+    return this.wrong().length;
+  }
+
+  /** Il grado del suggerimento già mostrato: 0 nessuno, 1 l'indizio, 2 anche il motivo. */
+  get hintStage(): 0 | 1 | 2 {
+    return this.pending?.stage ?? 0;
+  }
+
   /**
-   * Prima toglie tutti i rettangoli sbagliati; solo se non ce ne sono posa il prossimo
-   * pezzo a cui si arriva ragionando dai pezzi posati (nextDeduction), o se le regole non
-   * bastano un pezzo mancante della soluzione (che a quel punto è sempre libero).
-   * undefined se è già risolto.
+   * Prima toglie tutti i rettangoli sbagliati, spiegando il primo. Se non ce ne sono,
+   * il prossimo pezzo a cui si arriva ragionando dai pezzi posati (nextDeduction), a
+   * gradi: indizio, motivo, pezzo. Se le regole non bastano posa subito un pezzo
+   * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
    */
   hint(): Hint | undefined {
     const wrong = this.wrong();
     if (wrong.length > 0) {
+      const why = this.whyWrong(wrong[0]!);
       this.apply({ removed: wrong, added: [] });
       this.hintsUsed++;
-      return { removed: wrong };
+      this.helped = true;
+      return { removed: wrong, wrong: { rect: wrong[0]!, why } };
     }
     const missing = this.puzzle.solution.find((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
     if (!missing) return undefined;
-    const found = nextDeduction(this.puzzle, this.rects);
-    // Le deduzioni valgono per ogni soluzione: fuori dalla soluzione solo se non è unica.
-    const deduced = found && this.puzzle.solution.some((sol) => sameRect(sol, found.rect)) ? found : undefined;
-    this.hintsUsed++;
-    if (!deduced) {
+    this.helped = true;
+    const pending = this.pending ?? this.deduce();
+    if (!pending) {
+      this.hintsUsed++;
       this.place(missing);
       return { placed: missing };
     }
-    const { clues, cols } = this.puzzle;
-    const reason: Reason = { rule: deduced.rule, clue: clues[deduced.clue]! };
-    if (deduced.cell !== undefined) reason.cell = { r: Math.floor(deduced.cell / cols), c: deduced.cell % cols };
-    if (deduced.by !== undefined) reason.by = clues[deduced.by]!;
-    this.place(deduced.rect);
-    return { placed: deduced.rect, reason };
+    if (pending.stage < 2) {
+      this.pending = { ...pending, stage: (pending.stage + 1) as 1 | 2 };
+      return this.pending.stage === 1 ? { focus: pending.reason } : { explain: pending.reason };
+    }
+    this.hintsUsed++;
+    this.place(pending.rect);
+    return { placed: pending.rect, reason: pending.reason };
+  }
+
+  /** Il prossimo pezzo deducibile, non ancora mostrato (stage 0). */
+  private deduce(): { rect: Rect; reason: Reason; stage: 0 } | undefined {
+    const found = nextDeduction(this.puzzle, this.rects);
+    // Le deduzioni valgono per ogni soluzione: fuori dalla soluzione solo se non è unica.
+    if (!found || !this.puzzle.solution.some((sol) => sameRect(sol, found.rect))) return undefined;
+    const { clues } = this.puzzle;
+    const reason: Reason = { rule: found.rule, clue: clues[found.clue]! };
+    if (found.cell !== undefined) reason.cell = this.cellAt(found.cell);
+    if (found.by !== undefined) reason.by = clues[found.by]!;
+    return { rect: found.rect, reason, stage: 0 };
+  }
+
+  private cellAt(idx: number): { r: number; c: number } {
+    return { r: Math.floor(idx / this.puzzle.cols), c: idx % this.puzzle.cols };
+  }
+
+  /** Perché un rettangolo posato è sbagliato (vedi WrongReason). */
+  whyWrong(rect: Rect): WrongReason {
+    const inside = this.cluesIn(rect);
+    if (inside.length === 0) return { kind: "empty" };
+    if (inside.length > 1) return { kind: "many", count: inside.length };
+    const clue = inside[0]!;
+    if (clue.n !== undefined && clue.n !== area(rect)) return { kind: "area", clue };
+    if (!fits(clue, rect)) return { kind: "shape", clue };
+    const correct = this.rects.filter((other) => this.puzzle.solution.some((sol) => sameRect(sol, other)));
+    const conflict = conflictOf(this.puzzle, correct, rect);
+    if (conflict?.kind === "starved") return { kind: "starved", clue: this.puzzle.clues[conflict.clue]! };
+    if (conflict?.kind === "uncovered") return { kind: "uncovered", cell: this.cellAt(conflict.cell) };
+    return { kind: "other" };
   }
 
   isSolved(): boolean {
@@ -168,6 +240,7 @@ export class Game {
   }
 
   private apply(action: Action): void {
+    this.pending = undefined;
     this.rects = this.rects.filter((rect) => !action.removed.includes(rect));
     this.rects.push(...action.added);
     this.history.push(action);

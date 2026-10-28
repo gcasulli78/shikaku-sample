@@ -127,7 +127,7 @@ describe("Game", () => {
     expect(game.canUndo).toBe(false);
   });
 
-  it("il suggerimento toglie prima tutti i rettangoli sbagliati, senza posarne", () => {
+  it("il suggerimento toglie prima tutti i rettangoli sbagliati, senza posarne, e spiega il primo", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 2, w: 1 }); // giusto
     game.place({ r: 0, c: 1, h: 1, w: 1 }); // sbagliato
@@ -137,6 +137,7 @@ describe("Game", () => {
         { r: 0, c: 1, h: 1, w: 1 },
         { r: 1, c: 1, h: 1, w: 2 },
       ],
+      wrong: { rect: { r: 0, c: 1, h: 1, w: 1 }, why: { kind: "empty" } },
     });
     expect(game.placed).toEqual([{ r: 0, c: 0, h: 2, w: 1 }]);
     expect(game.hintsUsed).toBe(1);
@@ -144,36 +145,74 @@ describe("Game", () => {
     expect(game.placed).toHaveLength(3);
   });
 
-  it("senza errori il suggerimento posa il pezzo a cui si arriva ragionando, con il motivo", () => {
+  it("perché un rettangolo è sbagliato", () => {
     const game = new Game(puzzle);
-    game.place({ r: 0, c: 0, h: 1, w: 3 }); // sbagliato, copre entrambe le soluzioni
-    expect(game.hint()).toEqual({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
-    expect(game.placed).toHaveLength(0);
-    // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
-    expect(game.hint()).toEqual({
-      placed: { r: 0, c: 1, h: 2, w: 2 },
-      reason: { rule: "single", clue: { r: 1, c: 2, n: 4 } },
+    expect(game.whyWrong({ r: 0, c: 1, h: 1, w: 1 })).toEqual({ kind: "empty" });
+    expect(game.whyWrong({ r: 0, c: 0, h: 2, w: 3 })).toEqual({ kind: "many", count: 2 });
+    expect(game.whyWrong({ r: 0, c: 0, h: 1, w: 3 })).toEqual({ kind: "area", clue: { r: 0, c: 0, n: 2 } });
+    // Il 2 in orizzontale rispetta l'indizio, ma il 4 non ha più spazio.
+    expect(game.whyWrong({ r: 0, c: 0, h: 1, w: 2 })).toEqual({ kind: "starved", clue: { r: 1, c: 2, n: 4 } });
+    //  ? . 1     il ? in un 1×1 lascia scoperta la casella in mezzo
+    const open = new Game({
+      rows: 1,
+      cols: 3,
+      clues: [{ r: 0, c: 0 }, { r: 0, c: 2, n: 1 }],
+      solution: [
+        { r: 0, c: 0, h: 1, w: 2 },
+        { r: 0, c: 2, h: 1, w: 1 },
+      ],
     });
-    expect(game.hint()).toEqual({
-      placed: { r: 0, c: 0, h: 2, w: 1 },
-      reason: { rule: "single", clue: { r: 0, c: 0, n: 2 } },
-    });
-    expect(game.hintsUsed).toBe(3);
-    expect(game.hint()).toBeUndefined();
-    expect(game.hintsUsed).toBe(3);
+    expect(open.whyWrong({ r: 0, c: 0, h: 1, w: 1 })).toEqual({ kind: "uncovered", cell: { r: 0, c: 1 } });
+    const square = new Game({ rows: 1, cols: 2, clues: [{ r: 0, c: 0, shape: "square" }], solution: [] });
+    expect(square.whyWrong({ r: 0, c: 0, h: 1, w: 2 })).toEqual({ kind: "shape", clue: { r: 0, c: 0, shape: "square" } });
   });
 
-  it("una partita salvata riprende rettangoli e suggerimenti, senza sovrapposizioni", () => {
+  it("senza errori il suggerimento procede a gradi: indizio, motivo, pezzo", () => {
+    const game = new Game(puzzle);
+    game.place({ r: 0, c: 0, h: 1, w: 3 }); // sbagliato, copre entrambe le soluzioni
+    expect(game.hint()).toMatchObject({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
+    expect(game.placed).toHaveLength(0);
+    // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
+    const reason = { rule: "single", clue: { r: 1, c: 2, n: 4 } };
+    expect(game.hint()).toEqual({ focus: reason });
+    expect(game.hintStage).toBe(1);
+    expect(game.hint()).toEqual({ explain: reason });
+    expect(game.hintStage).toBe(2);
+    expect(game.placed).toHaveLength(0);
+    expect(game.hint()).toEqual({ placed: { r: 0, c: 1, h: 2, w: 2 }, reason });
+    expect(game.hintStage).toBe(0);
+    expect(game.hintsUsed).toBe(2); // l'errore tolto e il pezzo posato
+    // Una mossa azzera i gradi.
+    expect(game.hint()).toMatchObject({ focus: { clue: { r: 0, c: 0, n: 2 } } });
+    game.undo();
+    expect(game.hintStage).toBe(0);
+  });
+
+  it("verifica: quanti errori, senza dire quali; conta come aiuto", () => {
+    const game = new Game(puzzle);
+    expect(game.helped).toBe(false);
+    game.place({ r: 0, c: 0, h: 2, w: 1 });
+    expect(game.check()).toBe(0);
+    game.place({ r: 0, c: 1, h: 1, w: 2 });
+    expect(game.check()).toBe(1);
+    expect(game.placed).toHaveLength(2);
+    expect(game.helped).toBe(true);
+    expect(game.hintsUsed).toBe(0);
+  });
+
+  it("una partita salvata riprende rettangoli e aiuti, senza sovrapposizioni", () => {
     const game = new Game(puzzle);
     game.place({ r: 0, c: 0, h: 2, w: 1 });
-    game.hint();
+    while (game.placed.length < 2) game.hint();
     const saved = JSON.parse(JSON.stringify(game.snapshot()));
     const resumed = Game.restore(puzzle, saved);
     expect(resumed.placed).toEqual(game.placed);
     expect(resumed.hintsUsed).toBe(1);
+    expect(resumed.helped).toBe(true);
     expect(resumed.isSolved()).toBe(true);
     const broken = Game.restore(puzzle, { rects: [{ r: 0, c: 0, h: 1, w: 2 }, { r: 0, c: 1, h: 2, w: 1 }], hintsUsed: 0 });
     expect(broken.placed).toEqual([{ r: 0, c: 0, h: 1, w: 2 }]);
+    expect(broken.helped).toBe(false);
   });
 
   it("vittoria solo con griglia completa e corretta", () => {
@@ -193,7 +232,7 @@ describe("Game", () => {
   it("risolvere a suon di suggerimenti vince sempre, ogni volta per deduzione", () => {
     for (const variant of ["classic", "shapes"] as const) {
       const game = new Game(generate({ rows: 10, cols: 10, seed: 7, variant }));
-      for (let hint = game.hint(); hint; hint = game.hint()) expect("reason" in hint && hint.reason, variant).toBeTruthy();
+      for (let hint = game.hint(); hint; hint = game.hint()) expect("placed" in hint ? hint.reason : true, variant).toBeTruthy();
       expect(game.isSolved()).toBe(true);
     }
   });
