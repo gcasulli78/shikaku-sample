@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
-import { grade, nextDeduction, type Rule } from "../src/grader";
-import { availableDifficulties, sameRect, type Clue, type Difficulty, type Rect, type Variant } from "../src/types";
+import { grade, nextDeduction, type Deduction, type Rule } from "../src/grader";
+import { candidatesFor, clueIndexMap, type SolveInput } from "../src/solver";
+import { availableDifficulties, contains, sameRect, type Clue, type Difficulty, type Rect, type Variant } from "../src/types";
 
 /** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
 function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
@@ -63,6 +64,29 @@ describe("grade", () => {
   }, 120_000);
 });
 
+/**
+ * Il motivo di "casella" e "caselle sicure" ricalcolato dalle sole forme che il giocatore
+ * vede (quelle che non toccano i pezzi posati): il messaggio deve essere vero così.
+ */
+function visibleReasonHolds(input: SolveInput, given: readonly Rect[], d: Deduction): boolean {
+  const clueAt = clueIndexMap(input);
+  const taken = new Set(given.flatMap((g) => Array.from({ length: g.h * g.w }, (_, k) => (g.r + Math.floor(k / g.w)) * input.cols + g.c + (k % g.w))));
+  const open = input.clues.flatMap((cl, i) => (given.some((g) => contains(g, cl.r, cl.c)) ? [] : [i]));
+  const cands = (i: number) => candidatesFor(input, i, clueAt).filter((cand) => !cand.cells.some((idx) => taken.has(idx)));
+  const only = (list: { rect: Rect }[]) => list.length === 1 && sameRect(list[0]!.rect, d.rect);
+  if (d.rule === "owner") {
+    const cell = d.cell!;
+    const others = open.filter((i) => i !== d.clue && cands(i).some((cand) => cand.cells.includes(cell)));
+    return others.length === 0 && only(cands(d.clue).filter((cand) => cand.cells.includes(cell)));
+  }
+  if (d.rule === "sure") {
+    const byCands = cands(d.by!);
+    const sure = byCands[0]!.cells.filter((idx) => byCands.every((cand) => cand.cells.includes(idx)));
+    return only(cands(d.clue).filter((cand) => !cand.cells.some((idx) => sure.includes(idx))));
+  }
+  return true;
+}
+
 describe("nextDeduction", () => {
   it("forma unica", () => {
     // Il 2 non può scendere (c'è il 4): ha una sola forma già all'inizio.
@@ -93,15 +117,12 @@ describe("nextDeduction", () => {
       rule: "sure",
       by: 3,
     });
-    // Il 4 aveva ancora tutte le sue forme: niente passo precedente da spiegare.
-    expect(nextDeduction(parse(["3..3", ".2..", "..4."]), [])).not.toHaveProperty("prior");
   });
 
-  it("celle sicure di un indizio che aveva già perso forme: si dice perché", () => {
-    // Puzzle segnalato dall'utente (8×8 Forme, 9 già posato). Il 7 può essere 1×7 o 7×1;
-    // la casella r1 c7 la raggiunge solo lui, quindi è verticale e copre comunque r6 c7:
-    // il 2 non quadrato in r6 c6 deve scendere.
-    const input = {
+  it("il motivo si vede dalla griglia: niente passi nascosti (puzzle segnalati)", () => {
+    // 8×8 Forme, 9 già posato. Prima: "le caselle che il 7 copre comunque tolgono spazio al
+    // 2", ma il 7 (1×7 o 7×1) era verticale solo per un passo non detto.
+    const first = {
       rows: 8,
       cols: 8,
       clues: [
@@ -117,19 +138,33 @@ describe("nextDeduction", () => {
         { r: 7, c: 3, n: 6, shape: "oblong" as const },
       ],
     };
-    expect(nextDeduction(input, [{ r: 1, c: 0, h: 3, w: 3 }])).toMatchObject({
-      clue: 8,
-      rect: { r: 6, c: 6, h: 2, w: 1 },
-      rule: "sure",
-      by: 4,
-      prior: { rule: "owner", cell: 1 * 8 + 7 },
-    });
+    expect(nextDeduction(first, [{ r: 1, c: 0, h: 3, w: 3 }])).toEqual({ clue: 1, rect: { r: 0, c: 6, h: 1, w: 2 }, rule: "guess" });
+    // 8×8 Forme, 15 già posato. Prima: "solo il 6 non quadrato può coprire la casella" r0 c0,
+    // ma anche l'altro 6 la copriva, con una striscia 6×1 tolta da un passo non detto.
+    const second = {
+      rows: 8,
+      cols: 8,
+      clues: [
+        { r: 0, c: 1, n: 6, shape: "oblong" as const },
+        { r: 0, c: 5, n: 15 },
+        { r: 2, c: 0, n: 6 },
+        { r: 3, c: 7 },
+        { r: 5, c: 2, n: 3 },
+        { r: 6, c: 1, shape: "oblong" as const },
+        { r: 6, c: 3, n: 2, shape: "oblong" as const },
+        { r: 6, c: 5, shape: "oblong" as const },
+        { r: 7, c: 3, n: 5, shape: "oblong" as const },
+        { r: 7, c: 7, n: 2, shape: "oblong" as const },
+      ],
+    };
+    expect(nextDeduction(second, [{ r: 0, c: 3, h: 3, w: 5 }])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 2, w: 3 }, rule: "guess" });
   });
 
   it("forme che lascerebbero buchi", () => {
-    expect(nextDeduction(parse(["..3.", "3..4", "....", ".42."]), [])).toMatchObject({
-      clue: 3,
-      rect: { r: 2, c: 0, h: 2, w: 2 },
+    // Il 4 in r1 c1 ha più forme: tutte tranne il quadrato a sinistra lascerebbero un buco.
+    expect(nextDeduction(parse(["...4", ".4..", "..2.", "3..3"]), [])).toMatchObject({
+      clue: 1,
+      rect: { r: 1, c: 0, h: 2, w: 2 },
       rule: "hole",
     });
   });
@@ -149,6 +184,7 @@ describe("nextDeduction", () => {
         const given: Rect[] = [];
         for (let d = nextDeduction(p, given); d; d = nextDeduction(p, given)) {
           expect(p.solution.some((sol) => sameRect(sol, d!.rect)), `${difficulty} ${variant} seed ${seed}`).toBe(true);
+          expect(visibleReasonHolds(p, given, d), `${difficulty} ${variant} seed ${seed}: ${d.rule}`).toBe(true);
           seen.add(d.rule);
           given.push(d.rect);
         }

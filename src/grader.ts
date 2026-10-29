@@ -85,8 +85,7 @@ function ruleSingle(s: State): Outcome {
   return "none";
 }
 
-/** notes (facoltativo): per ogni numero ristretto, la cella che solo lui può coprire. */
-function ruleCellOwner(s: State, total: number, notes?: Map<number, number>): Outcome {
+function ruleCellOwner(s: State, total: number): Outcome {
   const owners: number[][] = Array.from({ length: total }, () => []);
   s.cands.forEach((list, i) => {
     if (s.placed[i]) return;
@@ -105,15 +104,13 @@ function ruleCellOwner(s: State, total: number, notes?: Map<number, number>): Ou
     const kept = list.filter((cand) => cand.cells.includes(idx));
     if (kept.length < list.length) {
       s.cands[i] = kept;
-      notes?.set(i, idx);
       outcome = "progress";
     }
   }
   return outcome;
 }
 
-/** notes (facoltativo): per ogni numero ristretto, il numero le cui celle sicure lo hanno ristretto. */
-function ruleSureCells(s: State, notes?: Map<number, number>): Outcome {
+function ruleSureCells(s: State): Outcome {
   let outcome: Outcome = "none";
   for (let i = 0; i < s.cands.length; i++) {
     if (s.placed[i]) continue;
@@ -126,7 +123,6 @@ function ruleSureCells(s: State, notes?: Map<number, number>): Outcome {
       const kept = list.filter((cand) => !overlapsCells(cand, sure));
       if (kept.length < list.length) {
         s.cands[j] = kept;
-        notes?.set(j, i);
         outcome = "progress";
       }
     });
@@ -300,59 +296,80 @@ export interface Deduction {
   cell?: number;
   /** sure: il numero le cui celle sicure hanno tolto spazio. */
   by?: number;
-  /**
-   * sure: perché il numero `by` aveva già perso forme (l'ultima regola che gliele ha tolte;
-   * owner con la sua cella), se una regola gliele aveva tolte. Senza, "le caselle che il 7
-   * copre comunque" non si capiva: con tutte le sue forme il 7 copriva solo la propria.
-   */
-  prior?: { rule: Rule; cell?: number };
 }
 
 /**
- * Il prossimo pezzo a cui si arriva ragionando, partendo dai pezzi già posati (che devono
- * essere corretti): stesse regole di grade, in ordine di costo, fino al primo numero che
- * resta con una sola forma. undefined se le regole non bastano.
+ * Il prossimo pezzo che si deduce con UNA regola applicata alla griglia che il giocatore
+ * vede (solo i pezzi posati, che devono essere corretti): regole in ordine di costo, e per
+ * ogni regola il numero di indice più basso che resta con una sola forma. Ogni regola
+ * guarda solo la griglia visibile, senza le forme tolte prima ad altri numeri: così il
+ * motivo detto si verifica guardando la griglia. Con le catene di grade il messaggio
+ * diceva solo l'ultimo passo ("solo il 6 può coprire la casella" quando l'altro 6 l'aveva
+ * perso per un passo non detto). undefined se nessuna regola basta da sola.
  */
 export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduction | undefined {
   const total = input.rows * input.cols;
   const s = stateWith(input, given);
-  const why = new Map<number, Omit<Deduction, "clue" | "rect">>();
-  const cells = new Map<number, number>();
-  const by = new Map<number, number>();
-  const work: Work = { done: 0 };
-  const rules: [Rule, () => Outcome][] = [
-    ["owner", () => ruleCellOwner(s, total, cells)],
-    ["sure", () => ruleSureCells(s, by)],
-    ["hole", () => ruleNoHole(s, total)],
-    ["guess", () => ruleGuess(s, total, GUESS, work)],
-    ["deep", () => ruleGuess(s, total, DEEP_GUESS, work)],
-  ];
-  for (;;) {
-    if (++work.done > WORK_BUDGET || isContradiction(s, total)) return undefined;
-    const i = s.cands.findIndex((list, j) => !s.placed[j] && list.length === 1);
-    if (i >= 0) {
-      const found: Deduction = { clue: i, rect: s.cands[i]![0]!.rect, ...(why.get(i) ?? { rule: "single" }) };
-      // Le forme tolte dai pezzi posati non contano: quelle il giocatore le vede.
-      const prior = found.rule === "sure" && found.by !== undefined ? why.get(found.by) : undefined;
-      if (prior) found.prior = prior.cell !== undefined ? { rule: prior.rule, cell: prior.cell } : { rule: prior.rule };
-      return found;
+  if (isContradiction(s, total)) return undefined;
+  const open = s.placed.flatMap((rect, i) => (rect ? [] : [i]));
+  const forced = (i: number, kept: Candidate[]): Rect | undefined =>
+    kept.length === 1 && s.cands[i]!.length > 1 ? kept[0]!.rect : undefined;
+
+  for (const i of open) if (s.cands[i]!.length === 1) return { clue: i, rect: s.cands[i]![0]!.rect, rule: "single" };
+
+  // Casella che un solo numero può coprire.
+  const owners: number[][] = Array.from({ length: total }, () => []);
+  for (const i of open) {
+    for (const cand of s.cands[i]!) {
+      for (const idx of cand.cells) {
+        const o = owners[idx]!;
+        if (o[o.length - 1] !== i) o.push(i);
+      }
     }
-    let progress = false;
-    for (const [rule, run] of rules) {
-      const before = s.cands.map((list) => list.length);
-      cells.clear();
-      by.clear();
-      const outcome = run();
-      if (outcome === "contradiction") return undefined;
-      if (outcome === "none") continue;
-      s.cands.forEach((list, j) => {
-        if (list.length < before[j]!) why.set(j, { rule, cell: cells.get(j), by: by.get(j) });
-      });
-      progress = true;
-      break;
-    }
-    if (!progress) return undefined;
   }
+  for (const i of open) {
+    for (let idx = 0; idx < total; idx++) {
+      if (s.occupied[idx] || owners[idx]!.length !== 1 || owners[idx]![0] !== i) continue;
+      const rect = forced(i, s.cands[i]!.filter((cand) => cand.cells.includes(idx)));
+      if (rect) return { clue: i, rect, rule: "owner", cell: idx };
+    }
+  }
+
+  // Celle comuni a tutte le forme di un altro numero.
+  const sure = s.cands.map((list, i) => {
+    const [first, ...rest] = list;
+    if (s.placed[i] || !first) return new Set<number>();
+    return new Set(first.cells.filter((idx) => rest.every((cand) => cand.cells.includes(idx))));
+  });
+  for (const j of open) {
+    for (const i of open) {
+      if (i === j || sure[i]!.size === 0) continue;
+      const rect = forced(j, s.cands[j]!.filter((cand) => !overlapsCells(cand, sure[i]!)));
+      if (rect) return { clue: j, rect, rule: "sure", by: i };
+    }
+  }
+
+  const covered = new Uint8Array(total);
+  const taken = new Uint8Array(total);
+  for (const i of open) {
+    const rect = forced(i, s.cands[i]!.filter((cand) => !leavesHole(s, i, cand, total, covered, taken)));
+    if (rect) return { clue: i, rect, rule: "hole" };
+  }
+
+  const work: Work = { done: 0 };
+  for (const [rule, guess] of [["guess", GUESS], ["deep", DEEP_GUESS]] as const) {
+    for (const i of open) {
+      if (s.cands[i]!.length > guess.options) continue;
+      const kept = s.cands[i]!.filter((cand) => {
+        const trial = cloneState(s);
+        place(trial, i, cand);
+        return propagate(trial, total, guess.level, DIFFICULTIES.map(() => 0), work) !== "contradiction";
+      });
+      const rect = forced(i, kept);
+      if (rect) return { clue: i, rect, rule };
+    }
+  }
+  return undefined;
 }
 
 /**
