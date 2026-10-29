@@ -18,6 +18,11 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 - La logica (`types`, `rng`, `solver`, `grader`, `generator`, `game`) non usa il DOM ed è coperta dai test in `tests/`. `ui.ts` si occupa solo di rendering e input.
 - La build deve restare **un unico file HTML** che funziona aprendolo con doppio clic (`file://`), senza server. Il Worker è incluso inline (`./worker?worker&inline`).
 - `localStorage` sempre dentro try/catch: il gioco deve funzionare anche senza.
+- Sicurezza (assessment del 2026-10-29):
+  - Ciò che si rilegge da `localStorage` passa sempre da `stored.ts` (`parseSettings`, `parseSavedState`, `parseRecords`, `parseReady`): può essere rovinato o scritto da un'altra pagina della stessa origine (con `file://` sono tutti i file locali). Con un livello sconosciuto o una griglia enorme il gioco non partiva più.
+  - Niente `innerHTML` con testo variabile: la riga di stato è `{ level, text }` costruita con nodi DOM, e la partita salvata contiene solo la nota in testo semplice (non più lo `status` HTML).
+  - I link si aprono nel Worker (`jobs.ts`: `{ generate }` o `{ link }`), e il solver ha anche un limite di tempo (`LINK_TIME_MS` in `share.ts`): un link con tanti `?` su un 15×15 bloccava la pagina per 36–48 s.
+  - La build aggiunge una Content Security Policy (`vite.config.ts`, dopo `viteSingleFile`), con l'impronta sha256 dello script inline. Risorse esterne, fetch o nuovi script vanno aggiunti alla policy, altrimenti il browser li blocca.
 - Tutti i puzzle hanno soluzione unica, verificata dal solver.
 
 ## Regole di gioco decise dall'utente

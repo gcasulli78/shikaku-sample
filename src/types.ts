@@ -44,6 +44,10 @@ export const VARIANTS: { id: Variant; label: string }[] = [
   { id: "blocked", label: "Caselle nere" },
 ];
 
+export function isVariant(v: unknown): v is Variant {
+  return VARIANTS.some((x) => x.id === v);
+}
+
 export interface Puzzle {
   rows: number;
   cols: number;
@@ -101,6 +105,10 @@ export const TIME_LIMITS: Record<Difficulty, number> = { easy: 1000, medium: 100
 
 export function difficultyLevel(d: Difficulty): number {
   return DIFFICULTIES.findIndex((x) => x.id === d);
+}
+
+export function isDifficulty(v: unknown): v is Difficulty {
+  return DIFFICULTIES.some((d) => d.id === v);
 }
 
 export function difficultyLabel(d: Difficulty): string {

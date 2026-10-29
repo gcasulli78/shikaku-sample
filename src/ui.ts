@@ -1,8 +1,18 @@
-import { formatTime, Game, Timer, type Hint, type Reason, type SavedGame, type WrongReason } from "./game";
-import { generate, type GenerateOptions, type GenerateResult } from "./generator";
-import { parseRecordKey, recordKey, recordWin, type Records } from "./records";
+import { formatTime, Game, Timer, type Hint, type Reason, type WrongReason } from "./game";
+import type { GenerateOptions, GenerateResult } from "./generator";
+import { runJob, type Job } from "./jobs";
+import { parseRecordKey, recordKey, recordWin } from "./records";
 import { moveSelection, selectionAt, selectionRect, selectionStart, startSelection, type Selection } from "./selection";
-import { completePuzzle, encodePuzzle, puzzleFromCode } from "./share";
+import { completePuzzle, encodePuzzle, type LinkedPuzzle } from "./share";
+import {
+  CUSTOM,
+  parseReady,
+  parseRecords,
+  parseSavedState,
+  parseSettings,
+  type SavedState,
+  type Theme,
+} from "./stored";
 import { TUTORIAL } from "./tutorial";
 import {
   area,
@@ -33,22 +43,11 @@ const GAME_KEY = "shikaku:game";
 const RECORDS_KEY = "shikaku:records";
 /** Il puzzle nel link: indirizzo#p=codice (vedi share.ts). */
 const LINK_PREFIX = "#p=";
-const CUSTOM = "custom";
 
 /** Livelli lenti da generare: mentre si gioca se ne prepara già il prossimo. */
 const PREFETCH: Difficulty[] = ["expert", "master"];
 /** Puzzle pronti conservati al massimo (uno per griglia e livello). */
 const MAX_READY = 6;
-
-type Theme = "auto" | "light" | "dark";
-
-interface Settings {
-  sizeId: string;
-  custom: Size;
-  difficulty: Difficulty;
-  variant: Variant;
-  theme: Theme;
-}
 
 /** Cosa si chiede al generatore per una partita. */
 interface Choice {
@@ -176,19 +175,20 @@ function hintSpots(hint: ShownHint): { r: number; c: number }[] {
 const HINT_LABELS = ["Suggerimento", "Perché?", "Mostra il pezzo"];
 
 /**
- * Genera nel Worker; se non si può creare (browser vecchi), nel thread principale.
- * Una nuova richiesta annulla quella in corso: il Worker viene ricreato e la vecchia
- * promessa si risolve con undefined.
+ * Lavora nel Worker (genera un puzzle o apre un link); se non si può creare (browser
+ * vecchi), nel thread principale. Una nuova richiesta annulla quella in corso: il Worker
+ * viene ricreato e la vecchia promessa si risolve con undefined. R è il risultato dei
+ * lavori che si chiedono a questa istanza.
  */
-function createGenerator(): (options: GenerateOptions) => Promise<GenerateResult | undefined> {
+function createRunner<R>(): (job: Job) => Promise<R | undefined> {
   let worker: Worker | undefined;
   let usable = true;
-  let current: { id: number; options: GenerateOptions; resolve: (r: GenerateResult | undefined) => void } | undefined;
+  let current: { id: number; job: Job; resolve: (r: R | undefined) => void } | undefined;
   let nextId = 0;
 
-  const fallback = (job: NonNullable<typeof current>) => {
+  const fallback = (task: NonNullable<typeof current>) => {
     // Lascia al browser il tempo di mostrare "Generazione…" prima di bloccarsi.
-    setTimeout(() => job.resolve(current === job ? generate(job.options) : undefined), 30);
+    setTimeout(() => task.resolve(current === task ? (runJob(task.job) as R | undefined) : undefined), 30);
   };
 
   const spawn = () => {
@@ -199,11 +199,11 @@ function createGenerator(): (options: GenerateOptions) => Promise<GenerateResult
       worker = undefined;
       return;
     }
-    worker.addEventListener("message", (e: MessageEvent<{ id: number; result: GenerateResult }>) => {
+    worker.addEventListener("message", (e: MessageEvent<{ id: number; result: R | undefined }>) => {
       if (current && e.data.id === current.id) {
-        const job = current;
+        const task = current;
         current = undefined;
-        job.resolve(e.data.result);
+        task.resolve(e.data.result);
       }
     });
     worker.addEventListener("error", () => {
@@ -214,7 +214,7 @@ function createGenerator(): (options: GenerateOptions) => Promise<GenerateResult
     });
   };
 
-  return (options) =>
+  return (job) =>
     new Promise((resolve) => {
       if (current) {
         current.resolve(undefined);
@@ -222,22 +222,23 @@ function createGenerator(): (options: GenerateOptions) => Promise<GenerateResult
         worker?.terminate();
         worker = undefined;
       }
-      const job = { id: ++nextId, options, resolve };
-      current = job;
+      const task = { id: ++nextId, job, resolve };
+      current = task;
       if (usable && !worker) spawn();
-      if (worker) worker.postMessage({ id: job.id, options });
-      else fallback(job);
+      if (worker) worker.postMessage({ id: task.id, job });
+      else fallback(task);
     });
 }
 
-/** Oggetto salvato in localStorage, unito ai valori predefiniti. */
-function readJson<T extends object>(key: string, defaults: T): T {
+/** Valore salvato in localStorage, controllato da parse (vedi stored.ts); undefined se manca. */
+function readStored<T>(key: string, parse: (raw: unknown) => T): T {
+  let raw: unknown;
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "{}");
-    return typeof saved === "object" && saved !== null ? { ...defaults, ...saved } : defaults;
+    raw = JSON.parse(localStorage.getItem(key) ?? "null") ?? undefined;
   } catch {
-    return defaults;
+    // Storage non disponibile o JSON rovinato: come se non ci fosse niente.
   }
+  return parse(raw);
 }
 
 function removeKey(key: string): void {
@@ -256,23 +257,13 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
-const DEFAULT_SETTINGS: Settings = {
-  sizeId: "8x8",
-  custom: { rows: 6, cols: 8 },
-  difficulty: "medium",
-  variant: "classic",
-  theme: "auto",
-};
-
-type Ready = Record<string, GenerateResult>;
-
-/** La partita in corso, salvata a ogni mossa per riprenderla riaprendo la pagina. */
-interface SavedState {
-  puzzle?: GenerateResult;
-  variant?: Variant;
-  game?: SavedGame;
-  elapsed?: number;
-  status?: string;
+/**
+ * La riga di stato: il livello in evidenza (se c'è) e il testo. Si scrive con nodi DOM,
+ * mai come HTML: la nota arriva anche dalla partita salvata in localStorage.
+ */
+interface Status {
+  level?: string;
+  text: string;
 }
 
 function $<T extends HTMLElement>(id: string): T {
@@ -324,7 +315,7 @@ function cellArea(el: HTMLElement, r: number, c: number): void {
 }
 
 export function startApp(): void {
-  const settings = readJson(STORAGE_KEY, DEFAULT_SETTINGS);
+  const settings = readStored(STORAGE_KEY, parseSettings);
   const board = $<HTMLDivElement>("board");
   const sizeSelect = $<HTMLSelectElement>("size");
   const difficultySelect = $<HTMLSelectElement>("difficulty");
@@ -363,10 +354,12 @@ export function startApp(): void {
   const tutorialExit = $<HTMLButtonElement>("tutorial-exit");
 
   const timer = new Timer();
-  const generateAsync = createGenerator();
+  const generateAsync = createRunner<GenerateResult>();
   // Un secondo Worker per preparare in anticipo: non viene annullato dalle partite nuove.
-  const prefetchAsync = createGenerator();
-  const ready = readJson<Ready>(READY_KEY, {});
+  const prefetchAsync = createRunner<GenerateResult>();
+  // E uno per i link: un link costruito ad arte può tenere occupato il solver (fino a LINK_TIME_MS).
+  const linkAsync = createRunner<LinkedPuzzle>();
+  const ready = readStored(READY_KEY, parseReady);
   let pending: { key: string; promise: Promise<GenerateResult | undefined> } | undefined;
   // Assegnata alla prima generazione; fino ad allora i comandi sono disattivati.
   let game!: Game;
@@ -376,7 +369,9 @@ export function startApp(): void {
   let solved = false;
   let lastHint: ShownHint | undefined;
   /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
-  let gameStatus = "";
+  let gameStatus: Status = { text: "" };
+  /** La nota della riga di stato (" · da un link"…), salvata con la partita. */
+  let gameNote = "";
   /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
   let notice: string | undefined;
   /** Una mossa toglie il motivo del suggerimento e gli avvisi. */
@@ -384,7 +379,7 @@ export function startApp(): void {
     lastHint = undefined;
     notice = undefined;
   };
-  const records = readJson<Records>(RECORDS_KEY, {});
+  const records = readStored(RECORDS_KEY, parseRecords);
   /** Il passo del tutorial in corso: la partita vera resta salvata e si riprende all'uscita. */
   let tutorialStep: number | undefined;
   let request = 0;
@@ -426,13 +421,14 @@ export function startApp(): void {
     input.min = String(MIN_SIZE);
     input.max = String(MAX_SIZE);
   }
-  sizeSelect.value = PRESETS.some((p) => p.id === settings.sizeId) || settings.sizeId === CUSTOM ? settings.sizeId : "8x8";
-  rowsInput.value = String(clampSize(settings.custom.rows));
-  colsInput.value = String(clampSize(settings.custom.cols));
+  // Le impostazioni sono già controllate da parseSettings.
+  sizeSelect.value = settings.sizeId;
+  rowsInput.value = String(settings.custom.rows);
+  colsInput.value = String(settings.custom.cols);
   for (const d of DIFFICULTIES) difficultySelect.add(new Option(d.label, d.id));
-  difficultySelect.value = DIFFICULTIES.some((d) => d.id === settings.difficulty) ? settings.difficulty : "medium";
+  difficultySelect.value = settings.difficulty;
   for (const v of VARIANTS) variantSelect.add(new Option(v.label, v.id));
-  variantSelect.value = VARIANTS.some((v) => v.id === settings.variant) ? settings.variant : "classic";
+  variantSelect.value = settings.variant;
 
   const syncCustom = () => {
     customBox.hidden = sizeSelect.value !== CUSTOM;
@@ -484,7 +480,7 @@ export function startApp(): void {
   const prefetch = (choice: Choice) => {
     const key = readyKey(choice);
     if (!PREFETCH.includes(choice.difficulty) || ready[key] || pending?.key === key) return;
-    const promise = prefetchAsync(optionsFor(choice, 2));
+    const promise = prefetchAsync({ generate: optionsFor(choice, 2) });
     pending = { key, promise };
     void promise.then((puzzle) => {
       if (pending?.promise === promise) pending = undefined;
@@ -496,11 +492,19 @@ export function startApp(): void {
   const obtain = async (choice: Choice) => {
     const key = readyKey(choice);
     if (!ready[key] && pending?.key === key) await pending.promise;
-    return ready[key] ?? generateAsync(optionsFor(choice));
+    return ready[key] ?? generateAsync({ generate: optionsFor(choice) });
   };
 
-  const setStatus = (html: string) => {
-    statusEl.innerHTML = html;
+  const setStatus = ({ level, text }: Status) => {
+    const parts: (Node | string)[] = [];
+    if (level) {
+      const span = document.createElement("span");
+      span.className = "level";
+      span.textContent = level;
+      parts.push(span);
+    }
+    parts.push(text);
+    statusEl.replaceChildren(...parts);
   };
 
   const newGame = async () => {
@@ -521,7 +525,7 @@ export function startApp(): void {
     const id = ++request;
     newBtn.disabled = true;
     board.classList.add("busy");
-    setStatus(`Generazione di un ${size.rows}×${size.cols} ${difficultyLabel(target).toLowerCase()}…`);
+    setStatus({ text: `Generazione di un ${size.rows}×${size.cols} ${difficultyLabel(target).toLowerCase()}…` });
     const puzzle = await obtain(choice);
     if (!puzzle) return;
     if (id !== request) {
@@ -567,8 +571,11 @@ export function startApp(): void {
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
     board.ariaLabel = `Griglia ${rows} per ${cols}, ${difficultyLabel(difficulty)}`;
+    gameNote = note;
     gameStatus =
-      options.status ?? `<span class="level">${difficultyLabel(difficulty)}</span> · ${rows}×${cols}${variantSuffix(variant)}${note}`;
+      options.status !== undefined
+        ? { text: options.status }
+        : { level: difficultyLabel(difficulty), text: ` · ${rows}×${cols}${variantSuffix(variant)}${note}` };
     syncChoice();
     save();
     render();
@@ -583,7 +590,7 @@ export function startApp(): void {
       variant: gameVariant,
       game: game.snapshot(),
       elapsed: timer.elapsed(),
-      status: gameStatus,
+      note: gameNote,
     };
     writeJson(GAME_KEY, state);
   };
@@ -1056,11 +1063,17 @@ export function startApp(): void {
 
   /** Riprende la partita salvata; false se non ce n'è una. */
   function resume(): boolean {
-    const saved = readJson<SavedState>(GAME_KEY, {});
-    if (!saved.puzzle || !saved.variant || !saved.game) return false;
+    const saved = readStored(GAME_KEY, parseSavedState);
+    if (!saved) return false;
     // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
     syncDifficulties();
-    startGame(saved.puzzle, saved.variant, { saved, status: saved.status });
+    try {
+      startGame(saved.puzzle, saved.variant, { saved, note: saved.note });
+    } catch {
+      // Una partita salvata che supera i controlli ma non si riesce a riprendere: se ne inizia un'altra.
+      removeKey(GAME_KEY);
+      return false;
+    }
     return true;
   }
 
@@ -1077,18 +1090,30 @@ export function startApp(): void {
     variantSelect.value = variant;
   };
 
+  let linkRequest = 0;
+
   /**
-   * Apre il puzzle del link nell'indirizzo, se c'è ("none" se non c'è, "bad" se rovinato).
+   * Apre il puzzle del link nell'indirizzo, se c'è ("none" se non c'è, "bad" se rovinato,
+   * "stale" se nel frattempo è arrivato un altro link o è iniziata un'altra partita).
+   * Soluzione e livello si calcolano nel Worker: un link costruito ad arte non blocca la pagina.
    * L'indirizzo si ripulisce: ricaricando si riprende la partita salvata, non il link da capo.
    */
-  const openLink = (): "ok" | "bad" | "none" => {
+  const openLink = async (): Promise<"ok" | "bad" | "none" | "stale"> => {
     if (!location.hash.startsWith(LINK_PREFIX)) return "none";
-    const linked = puzzleFromCode(location.hash.slice(LINK_PREFIX.length));
+    const code = location.hash.slice(LINK_PREFIX.length);
     try {
       history.replaceState(null, "", location.href.split("#")[0]);
     } catch {
       // Alcuni browser con file://: l'indirizzo resta col link.
     }
+    const id = ++linkRequest;
+    const gameId = request;
+    if (game) {
+      notice = "Apertura del link…";
+      render();
+    } else setStatus({ text: "Apertura del link…" });
+    const linked = await linkAsync({ link: code });
+    if (id !== linkRequest || gameId !== request) return "stale";
     if (linked) {
       leaveTutorial();
       syncControls(linked.puzzle, linked.variant);
@@ -1104,15 +1129,16 @@ export function startApp(): void {
   };
   // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
   addEventListener("hashchange", () => {
-    if (openLink() === "bad") warnBadLink();
+    void openLink().then((link) => link === "bad" && warnBadLink());
   });
 
-  const link = openLink();
-  if (link === "ok") {
-    // Si gioca il puzzle del link.
-  } else if (resume()) {
-    if (link === "bad") warnBadLink();
-  } else {
-    void newGame().then(() => link === "bad" && warnBadLink());
-  }
+  void openLink().then((link) => {
+    if (link === "ok" || link === "stale") {
+      // Si gioca il puzzle del link, o quello iniziato nel frattempo.
+    } else if (resume()) {
+      if (link === "bad") warnBadLink();
+    } else {
+      void newGame().then(() => link === "bad" && warnBadLink());
+    }
+  });
 }

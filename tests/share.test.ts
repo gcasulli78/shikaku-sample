@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
 import { recordKey, parseRecordKey, recordWin, type Records } from "../src/records";
-import { decodePuzzle, encodePuzzle, puzzleFromCode } from "../src/share";
+import { decodePuzzle, encodePuzzle, LINK_TIME_MS, puzzleFromCode } from "../src/share";
 
 describe("link condivisibile", () => {
   it("codifica e decodifica gli indizi, con forme e aree aperte", () => {
@@ -39,6 +39,17 @@ describe("link condivisibile", () => {
     expect(decodePuzzle(code.slice(0, -1))).toBeUndefined(); // ultimo indizio troncato
     // Senza il primo indizio le aree non coprono più la griglia.
     expect(puzzleFromCode(encodePuzzle({ ...p, clues: p.clues.slice(1), variant: "classic" }))).toBeUndefined();
+    // Un numero più grande della griglia.
+    expect(decodePuzzle(encodePuzzle({ rows: 4, cols: 4, clues: [{ r: 0, c: 0, n: 255 }], variant: "classic" }))).toBeUndefined();
+  });
+
+  it("un link costruito per far esplodere il solver si rifiuta entro il tempo limite", () => {
+    // 12 indizi senza numero su un 15×15: prima teneva il solver occupato 36 s.
+    const code = "AQEPD3wBLgBZAJsBvwCYABwBMgBbAD8B0wBFAA";
+    expect(decodePuzzle(code)).toBeDefined();
+    const start = performance.now();
+    expect(puzzleFromCode(code)).toBeUndefined();
+    expect(performance.now() - start).toBeLessThan(LINK_TIME_MS + 1000);
   });
 });
 
@@ -47,6 +58,9 @@ describe("record", () => {
     const key = recordKey({ rows: 8, cols: 15, difficulty: "expert", variant: "shapes" });
     expect(parseRecordKey(key)).toEqual({ rows: 8, cols: 15, difficulty: "expert", variant: "shapes" });
     expect(parseRecordKey("rotto")).toBeUndefined();
+    expect(parseRecordKey("8x8:nope:classic")).toBeUndefined();
+    expect(parseRecordKey("8x8:medium:zzz")).toBeUndefined();
+    expect(parseRecordKey("3000x8:medium:classic")).toBeUndefined();
   });
 
   it("conta le vittorie e festeggia solo i record battuti", () => {

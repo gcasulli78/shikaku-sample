@@ -16,7 +16,7 @@ export interface SolveResult {
   count: number;
   /** Le soluzioni trovate, una per indizio nello stesso ordine di `clues`. */
   solutions: Rect[][];
-  /** Ricerca interrotta per budget esaurito: count non è affidabile. */
+  /** Ricerca interrotta per budget (passi o tempo) esaurito: count non è affidabile. */
   aborted: boolean;
 }
 
@@ -79,14 +79,16 @@ export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int3
  * si fallisce se una cella libera non è coperta da nessun candidato, e si ramifica
  * sulla cella coperta da meno candidati (le celle con un solo candidato sono forzate).
  * `maxNodes` limita i passi di ricerca: con molti indizi ad area aperta, in rari casi
- * la ricerca esplode (567 mila passi, 30 s su un 15×15 Forme).
+ * la ricerca esplode (567 mila passi, 30 s su un 15×15 Forme). Un passo però può costare
+ * molto (200 mila passi in 36 s su un link con 12 "?"): `maxMs` limita anche il tempo.
  */
-export function solve(input: SolveInput, limit = 2, maxNodes = Infinity): SolveResult {
+export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs = Infinity): SolveResult {
   const { rows, cols, clues } = input;
   const total = rows * cols;
   const blocked = input.blocked ?? [];
   const result: SolveResult = { count: 0, solutions: [], aborted: false };
   let nodes = 0;
+  const deadline = performance.now() + maxMs;
 
   // Con tutte le aree note la somma deve tornare esatta; con aree aperte non può superare la griglia.
   const known = clues.filter((cl) => cl.n !== undefined);
@@ -131,7 +133,8 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity): SolveR
   };
 
   const search = (): boolean => {
-    if (++nodes > maxNodes) {
+    // L'orologio si guarda ogni 256 passi.
+    if (++nodes > maxNodes || ((nodes & 255) === 0 && performance.now() > deadline)) {
       result.aborted = true;
       return true;
     }

@@ -1,6 +1,6 @@
-// Genera i puzzle fuori dal thread della pagina, così l'interfaccia resta reattiva.
-import { generate, type GenerateOptions } from "./generator";
+// Genera i puzzle e apre i link fuori dal thread della pagina, così l'interfaccia resta reattiva.
+import { runJob, type Job } from "./jobs";
 
-self.onmessage = (e: MessageEvent<{ id: number; options: GenerateOptions }>) => {
-  self.postMessage({ id: e.data.id, result: generate(e.data.options) });
+self.onmessage = (e: MessageEvent<{ id: number; job: Job }>) => {
+  self.postMessage({ id: e.data.id, result: runJob(e.data.job) });
 };

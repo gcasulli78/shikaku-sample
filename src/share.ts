@@ -68,7 +68,7 @@ export function decodePuzzle(code: string): SharedPuzzle | undefined {
     if (shape) clue.shape = shape;
     if (flags & HAS_N) {
       const n = bytes[k++];
-      if (n === undefined || n < 1) return undefined;
+      if (n === undefined || n < 1 || n > rows * cols) return undefined;
       clue.n = n;
     }
     clues.push(clue);
@@ -79,13 +79,20 @@ export function decodePuzzle(code: string): SharedPuzzle | undefined {
 
 /** Passi massimi del solver per un puzzle da link (uno generato ne chiede di solito meno di mille). */
 const LINK_BUDGET = 200_000;
+/**
+ * Tempo massimo del solver per un link, in ms: un link costruito ad arte (tanti "?" su un
+ * 15×15) teneva il solver occupato 36 s prima di esaurire i passi. I puzzle generati si
+ * risolvono in pochi ms.
+ */
+export const LINK_TIME_MS = 2000;
 
 /**
  * Il puzzle completo da giocare: soluzione dal solver, livello dal valutatore.
- * undefined se non ha una soluzione unica (link modificato a mano).
+ * undefined se non ha una soluzione unica (link modificato a mano) o se il solver non
+ * finisce in tempo.
  */
 export function completePuzzle(input: SolveInput): GenerateResult | undefined {
-  const result = solve(input, 2, LINK_BUDGET);
+  const result = solve(input, 2, LINK_BUDGET, LINK_TIME_MS);
   if (result.aborted || result.count !== 1) return undefined;
   const graded = grade(input);
   return {
@@ -98,7 +105,12 @@ export function completePuzzle(input: SolveInput): GenerateResult | undefined {
   };
 }
 
-export function puzzleFromCode(code: string): { puzzle: GenerateResult; variant: Variant } | undefined {
+export interface LinkedPuzzle {
+  puzzle: GenerateResult;
+  variant: Variant;
+}
+
+export function puzzleFromCode(code: string): LinkedPuzzle | undefined {
   const shared = decodePuzzle(code);
   if (!shared) return undefined;
   const { variant, ...input } = shared;
