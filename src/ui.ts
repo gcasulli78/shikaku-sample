@@ -97,11 +97,34 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/**
+ * Perché l'indizio che toglie spazio (by) aveva già perso forme: senza questa frase
+ * "le caselle che il 7 copre comunque" non si capiva, dato che con tutte le sue forme
+ * il 7 copriva solo la propria casella.
+ */
+function priorText(rule: Reason["rule"], by: Clue): string {
+  const text = {
+    single: "",
+    owner: `solo ${clueName(by)} può coprire la casella evidenziata.`,
+    sure: `le caselle sicure di un altro indizio tolgono spazio ${clueName(by, "a")}.`,
+    hole: `alcune forme ${clueName(by, "di")} lascerebbero caselle o indizi senza copertura.`,
+    guess: `alcune forme ${clueName(by, "di")} portano a una contraddizione.`,
+    deep: `alcune forme ${clueName(by, "di")} portano a una contraddizione.`,
+  }[rule];
+  return capitalize(text);
+}
+
 /** Perché il pezzo suggerito è obbligato, a parole. */
 function reasonText(reason: Reason | undefined): string {
   if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
   const name = clueName(reason.clue);
   const of = clueName(reason.clue, "di");
+  if (reason.rule === "sure" && reason.by && reason.prior) {
+    return (
+      `${priorText(reason.prior.rule, reason.by)} Con le forme che gli restano, ${clueName(reason.by)} copre comunque ` +
+      `delle caselle che tolgono spazio ${clueName(reason.clue, "a")}: gli resta una sola forma.`
+    );
+  }
   const text = {
     single: `${name} può stare solo così.`,
     owner: `Solo ${name} può coprire la casella evidenziata: gli resta una sola forma.`,
@@ -169,7 +192,7 @@ function hintSpots(hint: ShownHint): { r: number; c: number }[] {
   }
   if ("focus" in hint) return [hint.focus.clue];
   const reason = "explain" in hint ? hint.explain : hint.reason;
-  return reason ? [reason.cell, reason.clue, reason.by].filter((spot) => spot !== undefined) : [];
+  return reason ? [reason.cell, reason.clue, reason.by, reason.prior?.cell].filter((spot) => spot !== undefined) : [];
 }
 
 const HINT_LABELS = ["Suggerimento", "Perché?", "Mostra il pezzo"];

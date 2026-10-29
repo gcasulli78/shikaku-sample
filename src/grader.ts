@@ -300,6 +300,12 @@ export interface Deduction {
   cell?: number;
   /** sure: il numero le cui celle sicure hanno tolto spazio. */
   by?: number;
+  /**
+   * sure: perché il numero `by` aveva già perso forme (l'ultima regola che gliele ha tolte;
+   * owner con la sua cella), se una regola gliele aveva tolte. Senza, "le caselle che il 7
+   * copre comunque" non si capiva: con tutte le sue forme il 7 copriva solo la propria.
+   */
+  prior?: { rule: Rule; cell?: number };
 }
 
 /**
@@ -324,7 +330,13 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduct
   for (;;) {
     if (++work.done > WORK_BUDGET || isContradiction(s, total)) return undefined;
     const i = s.cands.findIndex((list, j) => !s.placed[j] && list.length === 1);
-    if (i >= 0) return { clue: i, rect: s.cands[i]![0]!.rect, ...(why.get(i) ?? { rule: "single" }) };
+    if (i >= 0) {
+      const found: Deduction = { clue: i, rect: s.cands[i]![0]!.rect, ...(why.get(i) ?? { rule: "single" }) };
+      // Le forme tolte dai pezzi posati non contano: quelle il giocatore le vede.
+      const prior = found.rule === "sure" && found.by !== undefined ? why.get(found.by) : undefined;
+      if (prior) found.prior = prior.cell !== undefined ? { rule: prior.rule, cell: prior.cell } : { rule: prior.rule };
+      return found;
+    }
     let progress = false;
     for (const [rule, run] of rules) {
       const before = s.cands.map((list) => list.length);

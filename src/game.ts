@@ -9,13 +9,15 @@ interface Action {
 
 /**
  * Perché il pezzo suggerito è obbligato (vedi Rule in grader.ts): l'indizio, e se c'è
- * la casella che solo lui può coprire o l'indizio che gli ha tolto spazio.
+ * la casella che solo lui può coprire o l'indizio che gli ha tolto spazio; prior: perché
+ * quell'indizio aveva già perso forme (vedi Deduction.prior).
  */
 export interface Reason {
   rule: Rule;
   clue: Clue;
   cell?: { r: number; c: number };
   by?: Clue;
+  prior?: { rule: Rule; cell?: { r: number; c: number } };
 }
 
 /**
@@ -259,6 +261,10 @@ export class Game {
     const reason: Reason = { rule: found.rule, clue: clues[found.clue]! };
     if (found.cell !== undefined) reason.cell = this.cellAt(found.cell);
     if (found.by !== undefined) reason.by = clues[found.by]!;
+    if (found.prior) {
+      const { rule, cell } = found.prior;
+      reason.prior = cell !== undefined ? { rule, cell: this.cellAt(cell) } : { rule };
+    }
     return { rect: found.rect, reason };
   }
 

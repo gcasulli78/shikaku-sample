@@ -93,6 +93,37 @@ describe("nextDeduction", () => {
       rule: "sure",
       by: 3,
     });
+    // Il 4 aveva ancora tutte le sue forme: niente passo precedente da spiegare.
+    expect(nextDeduction(parse(["3..3", ".2..", "..4."]), [])).not.toHaveProperty("prior");
+  });
+
+  it("celle sicure di un indizio che aveva già perso forme: si dice perché", () => {
+    // Puzzle segnalato dall'utente (8×8 Forme, 9 già posato). Il 7 può essere 1×7 o 7×1;
+    // la casella r1 c7 la raggiunge solo lui, quindi è verticale e copre comunque r6 c7:
+    // il 2 non quadrato in r6 c6 deve scendere.
+    const input = {
+      rows: 8,
+      cols: 8,
+      clues: [
+        { r: 0, c: 2, shape: "oblong" as const },
+        { r: 0, c: 6, n: 2 },
+        { r: 1, c: 0, n: 9, shape: "square" as const },
+        { r: 1, c: 4, n: 12 },
+        { r: 4, c: 7, n: 7 },
+        { r: 5, c: 2, n: 12, shape: "oblong" as const },
+        { r: 5, c: 6, shape: "oblong" as const },
+        { r: 6, c: 5, n: 2 },
+        { r: 6, c: 6, n: 2, shape: "oblong" as const },
+        { r: 7, c: 3, n: 6, shape: "oblong" as const },
+      ],
+    };
+    expect(nextDeduction(input, [{ r: 1, c: 0, h: 3, w: 3 }])).toMatchObject({
+      clue: 8,
+      rect: { r: 6, c: 6, h: 2, w: 1 },
+      rule: "sure",
+      by: 4,
+      prior: { rule: "owner", cell: 1 * 8 + 7 },
+    });
   });
 
   it("forme che lascerebbero buchi", () => {
