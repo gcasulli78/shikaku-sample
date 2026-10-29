@@ -537,6 +537,27 @@ input,
   animation: blink 0.6s ease-in-out 3 alternate;
 }
 
+/* Spiegazione: una forma scartata dell'indizio, e i pezzi che renderebbe obbligati. */
+.ghost {
+  z-index: 2;
+  margin: 3px;
+  border-radius: 8px;
+  pointer-events: none;
+  border: 2px dashed var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+}
+
+.ghost.forced {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* Spiegazione: il problema che crea la forma scartata (casella o indizio). */
+.hint-mark.problem {
+  border: 3px solid var(--bad);
+  background: color-mix(in srgb, var(--bad) 25%, transparent);
+}
+
 /* Il rettangolo sbagliato di cui il suggerimento spiega il motivo. */
 .hint-mark.wrong {
   border: 2px dashed var(--bad);
@@ -573,6 +594,11 @@ input,
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.help.version {
+  font-size: 0.75rem;
+  opacity: 0.8;
 }
 
 .help.keys summary {

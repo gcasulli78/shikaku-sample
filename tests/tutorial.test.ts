@@ -9,7 +9,7 @@ describe("tutorial", () => {
     expect(puzzle).toBeDefined();
     expect(puzzle.logical).toBe(true);
     expect(puzzle.difficulty).toBe(step.level);
-    expect(nextDeduction(step, [])?.rule).toBe(step.firstRule);
+    expect(nextDeduction(step, [])?.kind).toBe(step.firstRule);
     if (step.variant !== "shapes") expect(step.clues.every((cl) => cl.n !== undefined && cl.shape === undefined)).toBe(true);
   });
 });

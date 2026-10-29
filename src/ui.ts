@@ -1,4 +1,4 @@
-import { formatTime, Game, Timer, type Hint, type Reason, type WrongReason } from "./game";
+import { formatTime, Game, Timer, type Discard, type Hint, type Reason, type WrongReason } from "./game";
 import type { GenerateOptions, GenerateResult } from "./generator";
 import { runJob, type Job } from "./jobs";
 import { parseRecordKey, recordKey, recordWin } from "./records";
@@ -97,21 +97,77 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Perché il pezzo suggerito è obbligato, a parole. */
+/** Riepilogo del motivo quando il pezzo è posato. */
 function reasonText(reason: Reason | undefined): string {
   if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
-  const name = clueName(reason.clue);
-  const of = clueName(reason.clue, "di");
-  const text = {
-    single: `${name} può stare solo così.`,
-    owner: `Solo ${name} può coprire la casella evidenziata: gli resta una sola forma.`,
-    sure: `Le caselle che ${clueName(reason.by ?? reason.clue)} copre comunque tolgono spazio ${clueName(reason.clue, "a")}: gli resta una sola forma.`,
-    hole: `Le altre forme ${of} lascerebbero caselle o indizi senza copertura.`,
-    guess: `Provando le altre forme ${of} si arriva a una contraddizione.`,
-    deep: `Provando le altre forme ${of} si arriva a una contraddizione, dopo qualche passo.`,
-  }[reason.rule];
-  return capitalize(text);
+  if (reason.kind === "single") return `${capitalize(clueName(reason.clue))} può stare solo così.`;
+  if (reason.only) return `Solo ${clueName(reason.clue)} arriva alla casella blu: ecco come.`;
+  return `Le altre forme ${clueName(reason.clue, "di")} creavano un problema: resta questa.`;
 }
+
+/**
+ * Un'immagine della spiegazione: la frase, la forma scartata (ghost, in rosso), i pezzi
+ * che quella forma rende obbligati (chain, in blu, con le caselle che li obbligano in
+ * marks) e il problema (problems, in rosso).
+ */
+interface Frame {
+  text: string;
+  ghost?: Rect;
+  chain: Rect[];
+  marks: { r: number; c: number }[];
+  problems: { r: number; c: number }[];
+}
+
+/** Un altro indizio nella spiegazione: "l'altro 4" se si chiama come quello che si guarda. */
+function otherName(clue: Clue, focus: Clue): string {
+  const name = clueName(clue);
+  return name === clueName(focus) ? `l'altro ${name.replace(/^(il |l')/, "")}` : name;
+}
+
+/** "il 4 resterebbe senza spazio" / "nessun numero potrebbe più coprire la casella rossa". */
+function problemText(problem: Discard["problem"], focus: Clue): string {
+  return "clue" in problem ? `${otherName(problem.clue, focus)} resterebbe senza spazio` : "nessun numero potrebbe più coprire la casella rossa";
+}
+
+/** Un pezzo obbligato della catena: l'unica forma rimasta, o l'unico modo di coprire la casella blu. */
+function forcedText(f: Discard["forced"][number], focus: Clue, first: boolean): string {
+  const name = otherName(f.clue, focus);
+  const how = f.cell ? `dovrebbe stare così, l'unico modo di coprire la casella blu` : first ? "potrebbe stare solo così" : "solo così";
+  return `${first ? "allora" : "poi"} ${name} ${how}`;
+}
+
+/**
+ * La spiegazione, un'immagine per forma scartata: "il 6 così? …" con il problema che crea,
+ * e se serve la catena di pezzi obbligati. Si guarda un indizio solo e tutto si verifica
+ * sulla griglia (segnalato dall'utente: le frasi astratte non si capivano).
+ */
+function explainFrames(reason: Reason): Frame[] {
+  const name = clueName(reason.clue);
+  if (reason.kind === "single") {
+    return [
+      { text: `${capitalize(name)} può stare in un solo modo: le altre forme toccherebbero altri numeri o pezzi.`, chain: [], marks: [reason.clue], problems: [] },
+    ];
+  }
+  if (reason.only) {
+    const many = reason.discards.length > 1 ? "le altre sue forme non ci arrivano" : "l'altra sua forma non ci arriva";
+    return [{ text: `Solo ${name} arriva alla casella blu, e ${many}.`, chain: [], marks: [reason.only, reason.clue], problems: [] }];
+  }
+  const total = reason.discards.length;
+  return reason.discards.map(({ rect, forced, problem }, k) => {
+    const steps = forced.map((f, n) => forcedText(f, reason.clue, n === 0));
+    const end = problemText(problem, reason.clue);
+    return {
+      text: `${total > 1 ? `(${k + 1}/${total}) ` : ""}${capitalize(name)} così? ${capitalize(steps.length > 0 ? `${steps.join(", ")}, e ${end}` : end)}.`,
+      ghost: rect,
+      chain: forced.map((f) => f.rect),
+      marks: forced.flatMap((f) => (f.cell ? [f.cell] : [])),
+      problems: ["clue" in problem ? problem.clue : problem.cell],
+    };
+  });
+}
+
+/** Ogni quanti ms la spiegazione passa alla forma scartata successiva. */
+const FRAME_MS = 3000;
 
 /** Cosa chiede la forma di un indizio, per spiegare un rettangolo della forma sbagliata. */
 const SHAPE_NEEDS: Record<Shape, string> = {
@@ -147,7 +203,7 @@ function secondsLeft(ms: number): string {
 /** Un suggerimento mostrato (l'attesa non si mostra come suggerimento, ma come avviso). */
 type ShownHint = Exclude<Hint, { wait: number }>;
 
-function hintText(hint: ShownHint): string {
+function hintText(hint: ShownHint, frame: number): string {
   if ("removed" in hint) {
     if (hint.wrong.why.kind === "misplaced") {
       // Il motivo non si vede dalla griglia: niente frase, il pezzo giusto.
@@ -163,20 +219,27 @@ function hintText(hint: ShownHint): string {
       : `Tolti ${hint.removed.length} rettangoli sbagliati. Quello evidenziato: ${why}.`;
   }
   if ("focus" in hint) return `Guarda ${clueName(hint.focus.clue)}: si può già capire dove va.`;
-  if ("explain" in hint) return reasonText(hint.explain);
+  if ("explain" in hint) {
+    const frames = explainFrames(hint.explain);
+    return frames[frame % frames.length]!.text;
+  }
   if (hint.fix) return `Ecco dove va ${clueName(hint.fix)}.`;
   return reasonText(hint.reason);
 }
 
 /** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva. */
-function hintSpots(hint: ShownHint): { r: number; c: number }[] {
+function hintSpots(hint: ShownHint, frame: number): { r: number; c: number }[] {
   if ("removed" in hint) {
     const { why } = hint.wrong;
     return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
   }
   if ("focus" in hint) return [hint.focus.clue];
-  const reason = "explain" in hint ? hint.explain : hint.reason;
-  return reason ? [reason.cell, reason.clue, reason.by].filter((spot) => spot !== undefined) : [];
+  if ("explain" in hint) {
+    const frames = explainFrames(hint.explain);
+    return frames[frame % frames.length]!.marks;
+  }
+  if (!hint.reason) return [];
+  return hint.reason.only ? [hint.reason.only, hint.reason.clue] : [hint.reason.clue];
 }
 
 const HINT_LABELS = ["Suggerimento", "Perché?", "Mostra il pezzo"];
@@ -329,6 +392,7 @@ export function startApp(): void {
   const variantSelect = $<HTMLSelectElement>("variant");
   const legend = $<HTMLParagraphElement>("legend");
   const statusEl = $<HTMLParagraphElement>("status");
+  $("version").textContent = `Versione ${__APP_VERSION__}`;
   const newBtn = $<HTMLButtonElement>("new");
   const customBox = $<HTMLDivElement>("custom");
   const rowsInput = $<HTMLInputElement>("rows");
@@ -375,6 +439,8 @@ export function startApp(): void {
   let hues: number[] = [];
   let solved = false;
   let lastHint: ShownHint | undefined;
+  /** Quale forma scartata mostra la spiegazione (vedi explainFrames). */
+  let explainFrame = 0;
   /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
   let gameStatus: Status = { text: "" };
   /** La nota della riga di stato (" · da un link"…), salvata con la partita. */
@@ -629,7 +695,7 @@ export function startApp(): void {
     board.replaceChildren();
     preview = undefined;
     if (notice) statusEl.textContent = notice;
-    else if (lastHint) statusEl.textContent = hintText(lastHint);
+    else if (lastHint) statusEl.textContent = hintText(lastHint, explainFrame);
     else setStatus(gameStatus);
 
     // Linee della griglia sotto i rettangoli, numeri sopra.
@@ -674,7 +740,31 @@ export function startApp(): void {
     }
 
     // Il motivo del suggerimento: la casella decisiva e gli indizi coinvolti lampeggiano.
-    for (const spot of lastHint ? hintSpots(lastHint) : []) {
+    // La spiegazione: la forma scartata e i pezzi che renderebbe obbligati, tratteggiati.
+    if (lastHint && "explain" in lastHint) {
+      const frames = explainFrames(lastHint.explain);
+      const frame = frames[explainFrame % frames.length]!;
+      for (const rect of frame.chain) {
+        const el = document.createElement("div");
+        el.className = "ghost forced";
+        gridArea(el, rect);
+        board.append(el);
+      }
+      if (frame.ghost) {
+        const el = document.createElement("div");
+        el.className = "ghost";
+        gridArea(el, frame.ghost);
+        board.append(el);
+      }
+      for (const spot of frame.problems) {
+        const el = document.createElement("div");
+        el.className = "hint-mark problem";
+        cellArea(el, spot.r, spot.c);
+        board.append(el);
+      }
+    }
+
+    for (const spot of lastHint ? hintSpots(lastHint, explainFrame) : []) {
       const el = document.createElement("div");
       el.className = "hint-mark";
       cellArea(el, spot.r, spot.c);
@@ -933,8 +1023,15 @@ export function startApp(): void {
     }
     clearMessages();
     lastHint = hint;
+    explainFrame = 0;
     afterMove();
   });
+  // La spiegazione scorre le forme scartate; mai durante un trascinamento.
+  setInterval(() => {
+    if (!lastHint || !("explain" in lastHint) || preview || explainFrames(lastHint.explain).length < 2) return;
+    explainFrame++;
+    render();
+  }, FRAME_MS);
   checkBtn.addEventListener("click", () => {
     const wrong = game.check();
     clearMessages();

@@ -282,94 +282,188 @@ export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): Gr
 }
 
 /**
- * Perché un numero ha una sola forma: "single" se l'aveva già (dati i pezzi posati),
- * altrimenti l'ultima regola che gli ha tolto forme.
+ * Cosa non va in una forma scartata, guardando la griglia dopo averla posata: una casella
+ * che nessun numero può più coprire, o un numero rimasto senza spazio.
  */
-export type Rule = "single" | "owner" | "sure" | "hole" | "guess" | "deep";
+export type Problem = { cell: number } | { clue: number };
+
+/**
+ * Una forma scartata e il problema che crea; forced: la catena, i numeri che con quella
+ * forma possono stare in un solo modo, uno dopo l'altro (vuota se il problema è immediato).
+ * Un numero è obbligato se gli resta una forma sola, o (cell) se è l'unico ad arrivare a
+ * una casella e ci arriva in un modo solo.
+ */
+export interface Discard {
+  rect: Rect;
+  forced: { clue: number; rect: Rect; cell?: number }[];
+  problem: Problem;
+}
+
+/**
+ * Come si arriva al pezzo: "single" se il numero ha una sola forma possibile, "direct" se
+ * ogni altra forma crea subito un problema, "chain" se per qualcuna serve un passo in più.
+ */
+export type DeductionKind = "single" | "direct" | "chain";
 
 export interface Deduction {
   /** Indice del numero e la sua forma, ormai obbligata. */
   clue: number;
   rect: Rect;
-  rule: Rule;
-  /** owner: la cella che solo questo numero può coprire. */
-  cell?: number;
-  /** sure: il numero le cui celle sicure hanno tolto spazio. */
-  by?: number;
+  kind: DeductionKind;
+  /** Le altre forme possibili, ognuna con il suo problema (vuoto se "single"). */
+  discards: Discard[];
+  /**
+   * La casella che solo questo numero raggiunge, se è il problema di tutte le forme
+   * scartate: allora basta dire quella ("solo il 6 arriva alla casella evidenziata").
+   */
+  only?: number;
+}
+
+/** Distanza tra una cella e il centro di un rettangolo, in caselle. */
+function distance(idx: number, cols: number, rect: Rect): number {
+  const r = Math.floor(idx / cols);
+  const c = idx % cols;
+  return Math.abs(r + 0.5 - (rect.r + rect.h / 2)) + Math.abs(c + 0.5 - (rect.c + rect.w / 2));
+}
+
+/** Il problema più vicino a rect nello stato s (undefined se non ce n'è). */
+function problemNear(s: State, input: SolveInput, rect: Rect): Problem | undefined {
+  const { cols } = input;
+  const total = input.rows * cols;
+  const covered = new Uint8Array(total);
+  let best: { problem: Problem; d: number } | undefined;
+  const consider = (problem: Problem, idx: number) => {
+    const d = distance(idx, cols, rect);
+    if (!best || d < best.d) best = { problem, d };
+  };
+  s.cands.forEach((list, i) => {
+    if (s.placed[i]) return;
+    if (list.length === 0) consider({ clue: i }, input.clues[i]!.r * cols + input.clues[i]!.c);
+    for (const cand of list) for (const idx of cand.cells) covered[idx] = 1;
+  });
+  for (let idx = 0; idx < total; idx++) if (!s.occupied[idx] && !covered[idx]) consider({ cell: idx }, idx);
+  return best?.problem;
+}
+
+/** I numeri obbligati nello stato (vedi Discard): non lo erano già sulla griglia visibile s. */
+function forcedIn(state: State, s: State, input: SolveInput): Discard["forced"] {
+  const steps: Discard["forced"] = [];
+  const seen = (j: number, rect: Rect) => steps.some((st) => st.clue === j && sameRect(st.rect, rect));
+  state.cands.forEach((list, j) => {
+    if (!state.placed[j] && list.length === 1 && s.cands[j]!.length > 1) steps.push({ clue: j, rect: list[0]!.rect });
+  });
+  const total = input.rows * input.cols;
+  const owners: number[][] = Array.from({ length: total }, () => []);
+  state.cands.forEach((list, j) => {
+    if (state.placed[j]) return;
+    for (const cand of list) for (const idx of cand.cells) if (owners[idx]![owners[idx]!.length - 1] !== j) owners[idx]!.push(j);
+  });
+  for (let idx = 0; idx < total; idx++) {
+    if (state.occupied[idx] || owners[idx]!.length !== 1) continue;
+    const j = owners[idx]![0]!;
+    const covering = state.cands[j]!.filter((cand) => cand.cells.includes(idx));
+    if (state.cands[j]!.length > 1 && covering.length === 1 && !seen(j, covering[0]!.rect)) steps.push({ clue: j, rect: covering[0]!.rect, cell: idx });
+  }
+  return steps;
+}
+
+/** Pezzi obbligati al massimo in una catena: oltre, la spiegazione non si segue più. */
+export const MAX_CHAIN = 3;
+
+/**
+ * Perché la forma cand del numero i è impossibile, guardando solo la griglia: posata, crea
+ * subito un problema; oppure (catena) un altro numero può stare solo in un modo, posato
+ * anche quello magari un altro ancora, fino al problema. La catena più corta, al massimo
+ * MAX_CHAIN pezzi. undefined se non si vede così.
+ */
+function discardOf(s: State, input: SolveInput, i: number, cand: Candidate, maxChain: number): Discard | undefined {
+  const first = cloneState(s);
+  place(first, i, cand);
+  let level: { state: State; forced: Discard["forced"] }[] = [{ state: first, forced: [] }];
+  for (let depth = 0; depth <= maxChain && level.length > 0; depth++) {
+    for (const { state, forced } of level) {
+      const last = forced[forced.length - 1]?.rect ?? cand.rect;
+      const problem = problemNear(state, input, last);
+      if (problem) return { rect: cand.rect, forced, problem };
+    }
+    if (depth === maxChain) break;
+    const next: typeof level = [];
+    for (const { state, forced } of level) {
+      for (const step of forcedIn(state, s, input)) {
+        const after = cloneState(state);
+        place(after, step.clue, state.cands[step.clue]!.find((c) => sameRect(c.rect, step.rect))!);
+        next.push({ state: after, forced: [...forced, step] });
+      }
+    }
+    level = next;
+  }
+  return undefined;
 }
 
 /**
- * Il prossimo pezzo che si deduce con UNA regola applicata alla griglia che il giocatore
- * vede (solo i pezzi posati, che devono essere corretti): regole in ordine di costo, e per
- * ogni regola il numero di indice più basso che resta con una sola forma. Ogni regola
- * guarda solo la griglia visibile, senza le forme tolte prima ad altri numeri: così il
- * motivo detto si verifica guardando la griglia. Con le catene di grade il messaggio
- * diceva solo l'ultimo passo ("solo il 6 può coprire la casella" quando l'altro 6 l'aveva
- * perso per un passo non detto). undefined se nessuna regola basta da sola.
+ * Il prossimo pezzo, ragionando come una persona su un numero alla volta: "dove può stare?".
+ * Si guarda solo la griglia visibile (i pezzi posati, che devono essere corretti): le forme
+ * possibili sono quelle che non toccano pezzi, altri numeri o caselle nere. Un numero si
+ * deduce se tutte le sue forme tranne una hanno un problema che si vede (discardOf).
+ * Tra i numeri che si deducono si sceglie il più semplice: forma unica, poi problemi
+ * immediati, poi catene corte; a parità meno forme da scartare, poi il più vicino a near
+ * (l'ultima mossa). Niente regole astratte ("solo lui può coprire la casella", ipotesi con
+ * contraddizioni non dette): segnalato dall'utente, le frasi non si capivano e sembravano
+ * sbagliate. Le catene più lunghe sono le più costose: dopo maxMs ci si accontenta di
+ * quello che si è trovato. undefined se nessun numero si deduce così.
  */
-export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduction | undefined {
-  const total = input.rows * input.cols;
+export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: Rect, maxMs = Infinity): Deduction | undefined {
+  const deadline = performance.now() + maxMs;
   const s = stateWith(input, given);
-  if (isContradiction(s, total)) return undefined;
-  const open = s.placed.flatMap((rect, i) => (rect ? [] : [i]));
-  const forced = (i: number, kept: Candidate[]): Rect | undefined =>
-    kept.length === 1 && s.cands[i]!.length > 1 ? kept[0]!.rect : undefined;
+  if (isContradiction(s, input.rows * input.cols)) return undefined;
+  const nearness = (i: number) => (near ? distance(input.clues[i]!.r * input.cols + input.clues[i]!.c, input.cols, near) : i);
+  const open = s.placed.flatMap((rect, i) => (rect ? [] : [i])).sort((a, b) => nearness(a) - nearness(b));
 
-  for (const i of open) if (s.cands[i]!.length === 1) return { clue: i, rect: s.cands[i]![0]!.rect, rule: "single" };
+  const singles = open.filter((i) => s.cands[i]!.length === 1);
+  if (singles.length > 0) return { clue: singles[0]!, rect: s.cands[singles[0]!]![0]!.rect, kind: "single", discards: [] };
 
-  // Casella che un solo numero può coprire.
-  const owners: number[][] = Array.from({ length: total }, () => []);
-  for (const i of open) {
-    for (const cand of s.cands[i]!) {
-      for (const idx of cand.cells) {
-        const o = owners[idx]!;
-        if (o[o.length - 1] !== i) o.push(i);
+  // Catene sempre più lunghe solo se le più corte non bastano: è anche molto più veloce.
+  let best: { found: Deduction; cost: number } | undefined;
+  for (let maxChain = 0; maxChain <= MAX_CHAIN && !best; maxChain++) {
+    for (const i of open) {
+      if (performance.now() > deadline) break;
+      const list = s.cands[i]!;
+      // Con più forme da scartare non può battere il migliore.
+      if (best && list.length - 1 > best.found.discards.length) continue;
+      let survivor: Candidate | undefined;
+      const discards: Discard[] = [];
+      for (const cand of list) {
+        const discard = discardOf(s, input, i, cand, maxChain);
+        if (discard) discards.push(discard);
+        else if (survivor) {
+          survivor = undefined;
+          break;
+        } else survivor = cand;
       }
+      if (!survivor || discards.length !== list.length - 1) continue;
+      const kind: DeductionKind = discards.some((dis) => dis.forced.length > 0) ? "chain" : "direct";
+      // A parità di catena meno forme da scartare, poi il più vicino (open è in ordine).
+      if (!best || discards.length < best.cost) best = { found: { clue: i, rect: survivor.rect, kind, discards }, cost: discards.length };
     }
   }
-  for (const i of open) {
-    for (let idx = 0; idx < total; idx++) {
-      if (s.occupied[idx] || owners[idx]!.length !== 1 || owners[idx]![0] !== i) continue;
-      const rect = forced(i, s.cands[i]!.filter((cand) => cand.cells.includes(idx)));
-      if (rect) return { clue: i, rect, rule: "owner", cell: idx };
+  // Una casella che solo questo numero raggiunge e che nessuna forma scartata copre: è il
+  // problema di tutte, e basta mostrare quella.
+  if (best && best.found.kind !== "single") {
+    const found = best.found;
+    const rest = s.cands[found.clue]!.filter((cand) => !sameRect(cand.rect, found.rect));
+    const survivorCells = s.cands[found.clue]!.find((cand) => sameRect(cand.rect, found.rect))!.cells;
+    const only = survivorCells.find(
+      (idx) =>
+        !s.occupied[idx] &&
+        rest.every((cand) => !cand.cells.includes(idx)) &&
+        open.every((j) => j === found.clue || !s.cands[j]!.some((cand) => cand.cells.includes(idx))),
+    );
+    if (only !== undefined) {
+      found.only = only;
+      found.discards = found.discards.map((dis) => ({ rect: dis.rect, forced: [], problem: { cell: only } }));
     }
   }
-
-  // Celle comuni a tutte le forme di un altro numero.
-  const sure = s.cands.map((list, i) => {
-    const [first, ...rest] = list;
-    if (s.placed[i] || !first) return new Set<number>();
-    return new Set(first.cells.filter((idx) => rest.every((cand) => cand.cells.includes(idx))));
-  });
-  for (const j of open) {
-    for (const i of open) {
-      if (i === j || sure[i]!.size === 0) continue;
-      const rect = forced(j, s.cands[j]!.filter((cand) => !overlapsCells(cand, sure[i]!)));
-      if (rect) return { clue: j, rect, rule: "sure", by: i };
-    }
-  }
-
-  const covered = new Uint8Array(total);
-  const taken = new Uint8Array(total);
-  for (const i of open) {
-    const rect = forced(i, s.cands[i]!.filter((cand) => !leavesHole(s, i, cand, total, covered, taken)));
-    if (rect) return { clue: i, rect, rule: "hole" };
-  }
-
-  const work: Work = { done: 0 };
-  for (const [rule, guess] of [["guess", GUESS], ["deep", DEEP_GUESS]] as const) {
-    for (const i of open) {
-      if (s.cands[i]!.length > guess.options) continue;
-      const kept = s.cands[i]!.filter((cand) => {
-        const trial = cloneState(s);
-        place(trial, i, cand);
-        return propagate(trial, total, guess.level, DIFFICULTIES.map(() => 0), work) !== "contradiction";
-      });
-      const rect = forced(i, kept);
-      if (rect) return { clue: i, rect, rule };
-    }
-  }
-  return undefined;
+  return best?.found;
 }
 
 /**

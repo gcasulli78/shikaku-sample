@@ -1,6 +1,7 @@
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import pkg from "./package.json";
 
 /** Impronta CSP di uno script (Web Crypto: niente @types/node solo per questo). */
 async function sha256(text: string): Promise<string> {
@@ -44,6 +45,8 @@ function contentSecurityPolicy(): Plugin {
 }
 
 export default defineConfig({
+  // La versione si vede in fondo alla pagina: così si sa se il sito è aggiornato.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // La CSP va dopo viteSingleFile: l'impronta è quella dello script già inserito.
   plugins: [viteSingleFile(), contentSecurityPolicy()],
   test: {

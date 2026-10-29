@@ -222,7 +222,7 @@ describe("Game", () => {
     expect(game.hint(0)).toMatchObject({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
     expect(game.placed).toHaveLength(0);
     // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
-    const reason = { rule: "single", clue: { r: 1, c: 2, n: 4 } };
+    const reason = { kind: "single", clue: { r: 1, c: 2, n: 4 }, discards: [] };
     expect(game.hint(0)).toEqual({ focus: reason });
     expect(game.hintStage).toBe(1);
     expect(game.hint(0)).toEqual({ explain: reason });

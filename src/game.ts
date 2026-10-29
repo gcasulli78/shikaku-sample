@@ -1,4 +1,4 @@
-import { conflictOf, nextDeduction, type Rule } from "./grader";
+import { conflictOf, nextDeduction, type DeductionKind } from "./grader";
 import { area, contains, fits, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
 
 /** Un'azione annullabile: rettangoli tolti e aggiunti insieme. */
@@ -7,15 +7,26 @@ interface Action {
   added: Rect[];
 }
 
+/** Il problema di una forma scartata: una casella che nessuno copre, o un indizio senza spazio. */
+export type Problem = { cell: { r: number; c: number } } | { clue: Clue };
+
 /**
- * Perché il pezzo suggerito è obbligato (vedi Rule in grader.ts): l'indizio, e se c'è
- * la casella che solo lui può coprire o l'indizio che gli ha tolto spazio.
+ * Una forma scartata, la catena di pezzi obbligati che porta al problema (cell: l'indizio
+ * è l'unico ad arrivare a quella casella), e il problema.
  */
+export interface Discard {
+  rect: Rect;
+  forced: { clue: Clue; rect: Rect; cell?: { r: number; c: number } }[];
+  problem: Problem;
+}
+
+/** Perché il pezzo suggerito è obbligato (vedi nextDeduction): le altre forme dell'indizio, scartate. */
 export interface Reason {
-  rule: Rule;
+  kind: DeductionKind;
   clue: Clue;
-  cell?: { r: number; c: number };
-  by?: Clue;
+  discards: Discard[];
+  /** La casella che solo questo indizio raggiunge, problema di tutte le forme scartate. */
+  only?: { r: number; c: number };
 }
 
 /**
@@ -48,6 +59,12 @@ export type Hint =
   | { explain: Reason }
   | { placed: Rect; reason?: Reason; fix?: Clue };
 
+/**
+ * Tempo massimo per cercare il suggerimento, in ms: gira al clic, sul thread della pagina.
+ * Misurato: su 15×15 Forme si arrivava a ~320 ms sul computer (di più sul telefono).
+ */
+const DEDUCTION_MS = 300;
+
 /** Attesa minima tra due pezzi posati dal suggerimento, in ms (decisa dall'utente). */
 export const HINT_COOLDOWN = 15_000;
 
@@ -72,6 +89,8 @@ export class Game {
   private pending: { rect: Rect; reason?: Reason; fix?: Clue; stage: 1 | 2 } | undefined;
   /** Quando il suggerimento ha posato l'ultimo pezzo, in tempo di gioco; vedi HINT_COOLDOWN. */
   private lastPlacedAt: number | undefined;
+  /** L'ultimo rettangolo posato o tolto: il suggerimento preferisce gli indizi vicini. */
+  private lastMove: Rect | undefined;
   /** Attesa tra due pezzi suggeriti, in ms: 0 nel tutorial. */
   readonly hintCooldown: number;
   /** Caselle nere, una per cella (r * cols + c). */
@@ -235,7 +254,7 @@ export class Game {
       this.placeHinted(rect, undefined, now);
       return { ...removed, placed: rect };
     }
-    const missing = this.puzzle.solution.find((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
+    const missing = this.nearestMissing();
     if (!missing) return undefined;
     this.helped = true;
     if (!this.pending) {
@@ -263,15 +282,28 @@ export class Game {
     return reason ? { placed: rect, reason } : { placed: rect };
   }
 
+  /** Il pezzo mancante della soluzione più vicino all'ultima mossa. */
+  private nearestMissing(): Rect | undefined {
+    const missing = this.puzzle.solution.filter((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
+    const near = this.lastMove;
+    if (!near) return missing[0];
+    const dist = (rect: Rect) => Math.abs(rect.r + rect.h / 2 - (near.r + near.h / 2)) + Math.abs(rect.c + rect.w / 2 - (near.c + near.w / 2));
+    return missing.reduce<Rect | undefined>((best, rect) => (!best || dist(rect) < dist(best) ? rect : best), undefined);
+  }
+
   /** Il prossimo pezzo deducibile, con il motivo. */
   private deduce(): { rect: Rect; reason: Reason } | undefined {
-    const found = nextDeduction(this.puzzle, this.rects);
+    const found = nextDeduction(this.puzzle, this.rects, this.lastMove, DEDUCTION_MS);
     // Le deduzioni valgono per ogni soluzione: fuori dalla soluzione solo se non è unica.
     if (!found || !this.puzzle.solution.some((sol) => sameRect(sol, found.rect))) return undefined;
     const { clues } = this.puzzle;
-    const reason: Reason = { rule: found.rule, clue: clues[found.clue]! };
-    if (found.cell !== undefined) reason.cell = this.cellAt(found.cell);
-    if (found.by !== undefined) reason.by = clues[found.by]!;
+    const discards = found.discards.map(({ rect, forced, problem }) => ({
+      rect,
+      forced: forced.map((f) => (f.cell === undefined ? { clue: clues[f.clue]!, rect: f.rect } : { clue: clues[f.clue]!, rect: f.rect, cell: this.cellAt(f.cell) })),
+      problem: "cell" in problem ? { cell: this.cellAt(problem.cell) } : { clue: clues[problem.clue]! },
+    }));
+    const reason: Reason = { kind: found.kind, clue: clues[found.clue]!, discards };
+    if (found.only !== undefined) reason.only = this.cellAt(found.only);
     return { rect: found.rect, reason };
   }
 
@@ -302,6 +334,7 @@ export class Game {
 
   private apply(action: Action): void {
     this.pending = undefined;
+    this.lastMove = action.added[0] ?? action.removed[0] ?? this.lastMove;
     this.rects = this.rects.filter((rect) => !action.removed.includes(rect));
     this.rects.push(...action.added);
     this.history.push(action);

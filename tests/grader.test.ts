@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
-import { grade, nextDeduction, type Deduction, type Rule } from "../src/grader";
+import { grade, nextDeduction, type Deduction, type DeductionKind } from "../src/grader";
 import { candidatesFor, clueIndexMap, type SolveInput } from "../src/solver";
 import { availableDifficulties, contains, sameRect, type Clue, type Difficulty, type Rect, type Variant } from "../src/types";
 
@@ -64,33 +64,70 @@ describe("grade", () => {
   }, 120_000);
 });
 
+/** Le caselle di un rettangolo (r * cols + c). */
+function cellsOf(rect: Rect, cols: number): number[] {
+  return Array.from({ length: rect.h * rect.w }, (_, k) => (rect.r + Math.floor(k / rect.w)) * cols + rect.c + (k % rect.w));
+}
+
 /**
- * Il motivo di "casella" e "caselle sicure" ricalcolato dalle sole forme che il giocatore
- * vede (quelle che non toccano i pezzi posati): il messaggio deve essere vero così.
+ * La spiegazione ricontrollata da capo con le sole forme possibili (candidatesFor), senza
+ * il valutatore: le forme scartate sono tutte le altre dell'indizio, ogni pezzo della catena
+ * è davvero obbligato (vedi Discard), e il problema c'è davvero. È quello che
+ * il giocatore deve poter verificare guardando la griglia. undefined se torna tutto.
  */
-function visibleReasonHolds(input: SolveInput, given: readonly Rect[], d: Deduction): boolean {
+function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deduction): string | undefined {
   const clueAt = clueIndexMap(input);
-  const taken = new Set(given.flatMap((g) => Array.from({ length: g.h * g.w }, (_, k) => (g.r + Math.floor(k / g.w)) * input.cols + g.c + (k % g.w))));
-  const open = input.clues.flatMap((cl, i) => (given.some((g) => contains(g, cl.r, cl.c)) ? [] : [i]));
-  const cands = (i: number) => candidatesFor(input, i, clueAt).filter((cand) => !cand.cells.some((idx) => taken.has(idx)));
-  const only = (list: { rect: Rect }[]) => list.length === 1 && sameRect(list[0]!.rect, d.rect);
-  if (d.rule === "owner") {
-    const cell = d.cell!;
-    const others = open.filter((i) => i !== d.clue && cands(i).some((cand) => cand.cells.includes(cell)));
-    return others.length === 0 && only(cands(d.clue).filter((cand) => cand.cells.includes(cell)));
+  const all = input.clues.map((_, i) => candidatesFor(input, i, clueAt));
+  const owner = (rect: Rect) => input.clues.findIndex((cl) => contains(rect, cl.r, cl.c));
+  const view = (pieces: { clue: number; rect: Rect }[]) => {
+    const taken = new Set(pieces.flatMap((p) => cellsOf(p.rect, input.cols)));
+    const done = new Set(pieces.map((p) => p.clue));
+    const avail = (i: number) => all[i]!.filter((cand) => !cand.cells.some((idx) => taken.has(idx)));
+    const open = input.clues.flatMap((_, i) => (done.has(i) ? [] : [i]));
+    return { taken, done, avail, open };
+  };
+  const base = given.map((rect) => ({ clue: owner(rect), rect }));
+  const visible = view(base).avail(d.clue).map((cand) => cand.rect);
+  const shown = [d.rect, ...d.discards.map((dis) => dis.rect)];
+  if (visible.length !== shown.length || !visible.every((rect) => shown.some((other) => sameRect(rect, other)))) return "forme diverse";
+  if (d.kind === "single") return d.discards.length === 0 ? undefined : "single con forme scartate";
+  for (const dis of d.discards) {
+    const pieces = [...base, { clue: d.clue, rect: dis.rect }];
+    for (const f of dis.forced) {
+      const now = view(pieces);
+      if (now.done.has(f.clue)) return "catena su un indizio già posato";
+      // Obbligato: una forma sola, o l'unico ad arrivare alla casella f.cell, in un modo solo.
+      const ways = f.cell === undefined ? now.avail(f.clue) : now.avail(f.clue).filter((cand) => cand.cells.includes(f.cell!));
+      if (f.cell !== undefined && (now.taken.has(f.cell) || now.open.some((j) => j !== f.clue && now.avail(j).some((cand) => cand.cells.includes(f.cell!))))) {
+        return "casella della catena non solo sua";
+      }
+      if (ways.length !== 1 || !sameRect(ways[0]!.rect, f.rect)) return "catena non obbligata";
+      pieces.push(f);
+    }
+    const end = view(pieces);
+    const { problem } = dis;
+    if ("clue" in problem) {
+      if (end.done.has(problem.clue) || end.avail(problem.clue).length > 0) return "indizio non senza spazio";
+    } else if (
+      end.taken.has(problem.cell) ||
+      (input.blocked ?? []).includes(problem.cell) ||
+      end.open.some((i) => end.avail(i).some((cand) => cand.cells.includes(problem.cell)))
+    ) {
+      return "casella coperta";
+    }
   }
-  if (d.rule === "sure") {
-    const byCands = cands(d.by!);
-    const sure = byCands[0]!.cells.filter((idx) => byCands.every((cand) => cand.cells.includes(idx)));
-    return only(cands(d.clue).filter((cand) => !cand.cells.some((idx) => sure.includes(idx))));
+  if (d.only !== undefined) {
+    const now = view(base);
+    if (now.open.some((i) => i !== d.clue && now.avail(i).some((cand) => cand.cells.includes(d.only!)))) return "casella non solo sua";
+    if (!cellsOf(d.rect, input.cols).includes(d.only)) return "casella fuori dal pezzo";
   }
-  return true;
+  return undefined;
 }
 
 describe("nextDeduction", () => {
   it("forma unica", () => {
     // Il 2 non può scendere (c'è il 4): ha una sola forma già all'inizio.
-    expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 1, w: 2 }, rule: "single" });
+    expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 1, w: 2 }, kind: "single", discards: [] });
   });
 
   it("riparte dai pezzi già posati", () => {
@@ -99,27 +136,31 @@ describe("nextDeduction", () => {
     expect(nextDeduction(input, [{ r: 0, c: 0, h: 1, w: 2 }, { r: 1, c: 0, h: 2, w: 2 }])).toBeUndefined();
   });
 
-  it("casella che può coprire un solo indizio", () => {
-    // La seconda casella in alto la raggiunge solo il 6, a cui resta il 2×3 in alto a destra.
-    expect(nextDeduction(parse(["...6", "2...", ".4.."]), [])).toMatchObject({
-      clue: 0,
-      rect: { r: 0, c: 1, h: 2, w: 3 },
-      rule: "owner",
-      cell: 1,
-    });
+  it("casella che raggiunge un solo indizio: basta mostrare quella", () => {
+    // La seconda casella in alto la raggiunge solo il 6, e solo con il 2×3 in alto a destra.
+    const input = parse(["...6", "2...", ".4.."]);
+    const d = nextDeduction(input, [])!;
+    expect(d).toMatchObject({ clue: 0, rect: { r: 0, c: 1, h: 2, w: 3 }, kind: "direct", only: 1 });
+    expect(explanationHolds(input, [], d)).toBeUndefined();
   });
 
-  it("celle sicure di un altro indizio", () => {
-    // Le caselle che il 4 copre comunque tolgono spazio al 3 in alto a destra: resta orizzontale.
-    expect(nextDeduction(parse(["3..3", ".2..", "..4."]), [])).toMatchObject({
-      clue: 1,
-      rect: { r: 0, c: 1, h: 1, w: 3 },
-      rule: "sure",
-      by: 3,
-    });
+  it("ogni forma scartata con il suo problema", () => {
+    // Il 4 in r1 c1: le altre forme lasciano una casella scoperta o un numero senza spazio.
+    const input = parse(["...4", ".4..", "..2.", "3..3"]);
+    const d = nextDeduction(input, [])!;
+    expect(d).toMatchObject({ rect: { r: 1, c: 0, h: 2, w: 2 }, kind: "direct" });
+    expect(d.discards.length).toBeGreaterThan(1);
+    expect(explanationHolds(input, [], d)).toBeUndefined();
   });
 
-  it("il motivo si vede dalla griglia: niente passi nascosti (puzzle segnalati)", () => {
+  it("preferisce l'indizio vicino all'ultima mossa", () => {
+    // Quattro numeri con una forma sola, due in alto e due in basso: vince il più vicino.
+    const input = parse(["2.", "4.", "..", "..", "4.", "2."]);
+    expect(nextDeduction(input, [])?.clue).toBe(0);
+    expect(nextDeduction(input, [], { r: 5, c: 1, h: 1, w: 1 })?.clue).toBe(3);
+  });
+
+  it("i puzzle segnalati: spiegazioni che si verificano sulla griglia", () => {
     // 8×8 Forme, 9 già posato. Prima: "le caselle che il 7 copre comunque tolgono spazio al
     // 2", ma il 7 (1×7 o 7×1) era verticale solo per un passo non detto.
     const first = {
@@ -138,7 +179,6 @@ describe("nextDeduction", () => {
         { r: 7, c: 3, n: 6, shape: "oblong" as const },
       ],
     };
-    expect(nextDeduction(first, [{ r: 1, c: 0, h: 3, w: 3 }])).toEqual({ clue: 1, rect: { r: 0, c: 6, h: 1, w: 2 }, rule: "guess" });
     // 8×8 Forme, 15 già posato. Prima: "solo il 6 non quadrato può coprire la casella" r0 c0,
     // ma anche l'altro 6 la copriva, con una striscia 6×1 tolta da un passo non detto.
     const second = {
@@ -157,24 +197,25 @@ describe("nextDeduction", () => {
         { r: 7, c: 7, n: 2, shape: "oblong" as const },
       ],
     };
-    expect(nextDeduction(second, [{ r: 0, c: 3, h: 3, w: 5 }])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 2, w: 3 }, rule: "guess" });
+    // Il 2 in orizzontale? Allora il 7 potrebbe stare solo in orizzontale, e il 12 non
+    // quadrato resterebbe senza spazio: il passo sul 7 ora si vede, disegnato.
+    const given = [{ r: 1, c: 0, h: 3, w: 3 }];
+    const d = nextDeduction(first, given)!;
+    expect(d).toMatchObject({ clue: 8, rect: { r: 6, c: 6, h: 2, w: 1 }, kind: "chain" });
+    expect(d.discards[0]!.forced).toEqual([{ clue: 4, rect: { r: 4, c: 1, h: 1, w: 7 } }]);
+    expect(explanationHolds(first, given, d)).toBeUndefined();
+    // Qui nessun numero si deduce con catene di pezzi obbligati (neanche lunghe 8): il
+    // suggerimento posa un pezzo invece di una frase che non si verifica.
+    expect(nextDeduction(second, [{ r: 0, c: 3, h: 3, w: 5 }])).toBeUndefined();
   });
 
-  it("forme che lascerebbero buchi", () => {
-    // Il 4 in r1 c1 ha più forme: tutte tranne il quadrato a sinistra lascerebbero un buco.
-    expect(nextDeduction(parse(["...4", ".4..", "..2.", "3..3"]), [])).toMatchObject({
-      clue: 1,
-      rect: { r: 1, c: 0, h: 2, w: 2 },
-      rule: "hole",
-    });
-  });
-
-  it("deduzione dopo deduzione si arriva alla soluzione (puzzle generati)", () => {
-    const seen = new Set<Rule>();
+  it("ogni spiegazione si verifica sulla griglia (puzzle generati)", () => {
+    const seen = new Set<DeductionKind>();
     const cases: [number, Difficulty, Variant][] = [
       [8, "easy", "classic"],
       [8, "hard", "classic"],
       [8, "expert", "classic"],
+      [8, "master", "blocked"],
       [8, "hard", "shapes"],
       [8, "expert", "shapes"],
     ];
@@ -182,17 +223,23 @@ describe("nextDeduction", () => {
       for (let seed = 1; seed <= 3; seed++) {
         const p = generate({ rows: size, cols: size, difficulty, variant, seed });
         const given: Rect[] = [];
-        for (let d = nextDeduction(p, given); d; d = nextDeduction(p, given)) {
-          expect(p.solution.some((sol) => sameRect(sol, d!.rect)), `${difficulty} ${variant} seed ${seed}`).toBe(true);
-          expect(visibleReasonHolds(p, given, d), `${difficulty} ${variant} seed ${seed}: ${d.rule}`).toBe(true);
-          seen.add(d.rule);
+        while (given.length < p.solution.length) {
+          const d = nextDeduction(p, given, given[given.length - 1]);
+          const label = `${difficulty} ${variant} seed ${seed}`;
+          if (!d) {
+            // Nessuna deduzione che si veda: il suggerimento posa un pezzo della soluzione.
+            given.push(p.solution.find((sol) => !given.some((g) => sameRect(g, sol)))!);
+            continue;
+          }
+          expect(p.solution.some((sol) => sameRect(sol, d.rect)), label).toBe(true);
+          expect(explanationHolds(p, given, d), label).toBeUndefined();
+          seen.add(d.kind);
           given.push(d.rect);
         }
-        expect(given, `${difficulty} ${variant} seed ${seed}`).toHaveLength(p.solution.length);
       }
     }
-    expect([...seen].sort()).toEqual(expect.arrayContaining(["guess", "hole", "owner", "single", "sure"]));
-  }, 60_000);
+    expect([...seen].sort()).toEqual(["chain", "direct", "single"]);
+  }, 120_000);
 });
 
 describe("availableDifficulties", () => {

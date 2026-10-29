@@ -1,4 +1,4 @@
-import type { Rule } from "./grader";
+import type { DeductionKind } from "./grader";
 import type { Clue, Difficulty, Variant } from "./types";
 
 /** Un passo del tutorial: una griglia scritta a mano che si risolve con la regola spiegata. */
@@ -11,9 +11,9 @@ export interface TutorialStep {
   clues: Clue[];
   /** Caselle nere (r * cols + c), solo nella variante Caselle nere. */
   blocked?: number[];
-  /** Livello del valutatore e prima regola che serve (verificati dai test). */
+  /** Livello del valutatore e come si arriva al primo pezzo suggerito (verificati dai test). */
   level: Difficulty;
-  firstRule: Rule;
+  firstRule: DeductionKind;
 }
 
 export const TUTORIAL: TutorialStep[] = [
@@ -67,7 +67,7 @@ export const TUTORIAL: TutorialStep[] = [
       { r: 4, c: 1, n: 4 },
     ],
     level: "hard",
-    firstRule: "hole",
+    firstRule: "direct",
   },
   {
     title: "Ipotesi",
@@ -86,7 +86,7 @@ export const TUTORIAL: TutorialStep[] = [
       { r: 4, c: 4, n: 2 },
     ],
     level: "expert",
-    firstRule: "guess",
+    firstRule: "chain",
   },
   {
     title: "Variante Forme",
