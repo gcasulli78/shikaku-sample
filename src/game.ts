@@ -20,8 +20,9 @@ export interface Reason {
 
 /**
  * Perché un rettangolo è sbagliato: niente indizi o più di uno, area o forma che non
- * rispettano l'indizio, oppure posandolo un indizio resta senza spazio o una casella
- * senza copertura (other: la contraddizione non è così semplice).
+ * rispettano l'indizio, oppure posandolo un indizio resta subito senza spazio o una casella
+ * senza copertura. misplaced: rispetta l'indizio ma il motivo non si vede dalla griglia
+ * (arriva solo seguendo altri passi): il suggerimento mostra il pezzo giusto di quell'indizio.
  */
 export type WrongReason =
   | { kind: "empty" }
@@ -29,21 +30,23 @@ export type WrongReason =
   | { kind: "area" | "shape"; clue: Clue }
   | { kind: "starved"; clue: Clue }
   | { kind: "uncovered"; cell: { r: number; c: number } }
-  | { kind: "other" };
+  | { kind: "misplaced"; clue: Clue };
 
 /**
  * Esito di un suggerimento, a gradi: prima l'indizio su cui ragionare (focus), poi il
  * motivo (explain), poi il pezzo posato (placed). Se ci sono rettangoli sbagliati si
- * tolgono tutti, spiegando il primo. Un pezzo posato senza motivo viene dalla soluzione,
- * quando le regole del valutatore non bastano. wait: il pezzo non si posa ancora, mancano
- * tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito).
+ * tolgono tutti, spiegando il primo; se il primo è misplaced si posa anche il pezzo giusto
+ * del suo indizio (placed), o, durante l'attesa, al suggerimento dopo. Un pezzo posato
+ * senza motivo viene dalla soluzione: quando le regole del valutatore non bastano, o (fix)
+ * al posto di un rettangolo sbagliato di quell'indizio. wait: il pezzo non si posa ancora,
+ * mancano tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito).
  */
 export type Hint =
-  | { removed: Rect[]; wrong: { rect: Rect; why: WrongReason } }
+  | { removed: Rect[]; wrong: { rect: Rect; why: WrongReason }; placed?: Rect }
   | { wait: number }
   | { focus: Reason }
   | { explain: Reason }
-  | { placed: Rect; reason?: Reason };
+  | { placed: Rect; reason?: Reason; fix?: Clue };
 
 /** Attesa minima tra due pezzi posati dal suggerimento, in ms (decisa dall'utente). */
 export const HINT_COOLDOWN = 15_000;
@@ -66,7 +69,7 @@ export class Game {
   /** Usato un aiuto qualsiasi: vale per il record "senza aiuti". */
   helped = false;
   /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
-  private pending: { rect: Rect; reason: Reason; stage: 1 | 2 } | undefined;
+  private pending: { rect: Rect; reason?: Reason; fix?: Clue; stage: 1 | 2 } | undefined;
   /** Quando il suggerimento ha posato l'ultimo pezzo, in tempo di gioco; vedi HINT_COOLDOWN. */
   private lastPlacedAt: number | undefined;
   /** Attesa tra due pezzi suggeriti, in ms: 0 nel tutorial. */
@@ -221,7 +224,16 @@ export class Game {
       this.apply({ removed: wrong, added: [] });
       this.hintsUsed++;
       this.helped = true;
-      return { removed: wrong, wrong: { rect: wrong[0]!, why } };
+      const removed = { removed: wrong, wrong: { rect: wrong[0]!, why } };
+      if (why.kind !== "misplaced") return removed;
+      const rect = this.puzzle.solution[this.puzzle.clues.indexOf(why.clue)]!;
+      // Durante l'attesa il pezzo giusto resta pronto per il prossimo suggerimento.
+      if (this.cooldown(now) > 0) {
+        this.pending = { rect, fix: why.clue, stage: 2 };
+        return removed;
+      }
+      this.placeHinted(rect, undefined, now);
+      return { ...removed, placed: rect };
     }
     const missing = this.puzzle.solution.find((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
     if (!missing) return undefined;
@@ -232,12 +244,13 @@ export class Game {
       this.pending = { ...found, stage: 1 };
       return { focus: found.reason };
     }
-    const { rect, reason, stage } = this.pending;
-    if (stage === 1) {
+    const { rect, reason, fix, stage } = this.pending;
+    if (stage === 1 && reason) {
       this.pending = { rect, reason, stage: 2 };
       return { explain: reason };
     }
-    return this.placeHinted(rect, reason, now);
+    const placed = this.placeHinted(rect, reason, now);
+    return fix && "placed" in placed ? { ...placed, fix } : placed;
   }
 
   /** Posa il pezzo suggerito, se dall'ultimo sono passati HINT_COOLDOWN ms di gioco. */
@@ -278,7 +291,7 @@ export class Game {
     const conflict = conflictOf(this.puzzle, correct, rect);
     if (conflict?.kind === "starved") return { kind: "starved", clue: this.puzzle.clues[conflict.clue]! };
     if (conflict?.kind === "uncovered") return { kind: "uncovered", cell: this.cellAt(conflict.cell) };
-    return { kind: "other" };
+    return { kind: "misplaced", clue };
   }
 
   isSolved(): boolean {

@@ -121,8 +121,8 @@ const SHAPE_NEEDS: Record<Shape, string> = {
   tall: "un rettangolo più alto che largo",
 };
 
-/** Perché il rettangolo (evidenziato) è sbagliato, a parole. */
-function wrongText(why: WrongReason, rect: Rect): string {
+/** Perché il rettangolo (evidenziato) è sbagliato, a parole (misplaced: vedi hintText). */
+function wrongText(why: Exclude<WrongReason, { kind: "misplaced" }>, rect: Rect): string {
   switch (why.kind) {
     case "empty":
       return "non contiene nessun indizio";
@@ -136,8 +136,6 @@ function wrongText(why: WrongReason, rect: Rect): string {
       return `così ${clueName(why.clue)} non avrebbe più spazio`;
     case "uncovered":
       return "così la casella evidenziata non la potrebbe coprire nessun indizio";
-    case "other":
-      return "non fa parte della soluzione";
   }
 }
 
@@ -151,6 +149,14 @@ type ShownHint = Exclude<Hint, { wait: number }>;
 
 function hintText(hint: ShownHint): string {
   if ("removed" in hint) {
+    if (hint.wrong.why.kind === "misplaced") {
+      // Il motivo non si vede dalla griglia: niente frase, il pezzo giusto.
+      const of = clueName(hint.wrong.why.clue, "di");
+      const where = hint.placed ? "ecco dove va" : "dove va te lo mostro al prossimo suggerimento";
+      return hint.removed.length === 1
+        ? `Tolto un rettangolo sbagliato ${of}: ${where}.`
+        : `Tolti ${hint.removed.length} rettangoli sbagliati. Quello evidenziato era ${of}: ${where}.`;
+    }
     const why = wrongText(hint.wrong.why, hint.wrong.rect);
     return hint.removed.length === 1
       ? `Tolto un rettangolo sbagliato: ${why}.`
@@ -158,6 +164,7 @@ function hintText(hint: ShownHint): string {
   }
   if ("focus" in hint) return `Guarda ${clueName(hint.focus.clue)}: si può già capire dove va.`;
   if ("explain" in hint) return reasonText(hint.explain);
+  if (hint.fix) return `Ecco dove va ${clueName(hint.fix)}.`;
   return reasonText(hint.reason);
 }
 
@@ -645,7 +652,7 @@ export function startApp(): void {
       const status = game.status(rect);
       if (status !== "open") el.classList.add(status);
       if (status === "valid") el.style.setProperty("--h", String(hues[clues.indexOf(game.cluesIn(rect)[0]!)]));
-      if (lastHint && "placed" in lastHint && sameRect(rect, lastHint.placed)) el.classList.add("hinted");
+      if (lastHint && "placed" in lastHint && lastHint.placed && sameRect(rect, lastHint.placed)) el.classList.add("hinted");
       board.append(el);
     });
 

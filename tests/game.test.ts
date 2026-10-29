@@ -145,6 +145,55 @@ describe("Game", () => {
     expect(game.placed).toHaveLength(3);
   });
 
+  describe("rettangolo sbagliato senza motivo visibile: il suggerimento mostra il pezzo giusto", () => {
+    //  2 . . .
+    //  . 6 . .     il 4 in colonna non toglie subito spazio a nessuno: sbagliato solo
+    //  2 . . 4     seguendo altri passi. Soluzione del 4: il 2×2 in basso a destra.
+    //  2 . . .
+    const misplaced: Puzzle = {
+      rows: 4,
+      cols: 4,
+      clues: [
+        { r: 0, c: 0, n: 2 },
+        { r: 1, c: 1, n: 6 },
+        { r: 2, c: 0, n: 2 },
+        { r: 2, c: 3, n: 4 },
+        { r: 3, c: 0, n: 2 },
+      ],
+      solution: [
+        { r: 0, c: 0, h: 2, w: 1 },
+        { r: 0, c: 1, h: 2, w: 3 },
+        { r: 2, c: 0, h: 1, w: 2 },
+        { r: 2, c: 2, h: 2, w: 2 },
+        { r: 3, c: 0, h: 1, w: 2 },
+      ],
+    };
+    const column = { r: 0, c: 3, h: 4, w: 1 };
+    const four = { r: 2, c: 2, h: 2, w: 2 };
+    const why = { kind: "misplaced", clue: { r: 2, c: 3, n: 4 } };
+
+    it("toglie il rettangolo e posa quello giusto", () => {
+      const game = new Game(misplaced);
+      game.place(column);
+      expect(game.whyWrong(column)).toEqual(why);
+      expect(game.hint(0)).toEqual({ removed: [column], wrong: { rect: column, why }, placed: four });
+      expect(game.placed).toEqual([four]);
+    });
+
+    it("durante l'attesa lo posa al suggerimento dopo", () => {
+      const game = new Game(misplaced);
+      game.hint(0);
+      game.hint(0);
+      expect(game.hint(0)).toMatchObject({ placed: {} }); // un pezzo suggerito: parte l'attesa
+      game.undo(); // l'attesa resta, la griglia torna vuota
+      game.place(column);
+      expect(game.hint(1000)).toEqual({ removed: [column], wrong: { rect: column, why } });
+      expect(game.hintStage).toBe(2);
+      expect(game.hint(2000)).toEqual({ wait: HINT_COOLDOWN - 2000 });
+      expect(game.hint(HINT_COOLDOWN)).toEqual({ placed: four, fix: why.clue });
+    });
+  });
+
   it("perché un rettangolo è sbagliato", () => {
     const game = new Game(puzzle);
     expect(game.whyWrong({ r: 0, c: 1, h: 1, w: 1 })).toEqual({ kind: "empty" });
@@ -280,7 +329,7 @@ describe("Game", () => {
       let now = 0;
       for (let hint = game.hint(now); hint; hint = game.hint((now += 60_000))) {
         expect("wait" in hint, variant).toBe(false);
-        expect("placed" in hint ? hint.reason : true, variant).toBeTruthy();
+        expect("placed" in hint && !("removed" in hint) ? hint.reason : true, variant).toBeTruthy();
       }
       expect(game.isSolved()).toBe(true);
     }

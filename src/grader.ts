@@ -374,19 +374,14 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[]): Deduct
 
 /**
  * Perché rect (che rispetta il suo indizio) è sbagliato: posato sopra ai pezzi corretti
- * given, la contraddizione a cui si arriva subito, o con le regole fino a Difficile (la
- * più semplice). undefined se non se ne trova una così semplice.
+ * given, la contraddizione che si vede subito. Solo quella: una che arriva seguendo altri
+ * passi il giocatore non la vede ("il 6 non avrebbe più spazio" quando il 6 è libero), e
+ * nessuna frase breve la spiega. Misurato: anche le regole di un passo sulla griglia
+ * visibile (casella di un solo indizio, celle sicure) danno solo contraddizioni immediate.
+ * undefined se non ce n'è una immediata.
  */
 export function conflictOf(input: SolveInput, given: readonly Rect[], rect: Rect): Conflict | undefined {
-  const total = input.rows * input.cols;
-  const base = stateWith(input, given);
-  if (!placeRect(base, rect)) return undefined;
-  const immediate = conflictIn(base, total);
-  if (immediate) return immediate;
-  for (let maxLevel = 0; maxLevel <= 2; maxLevel++) {
-    // propagate modifica lo stato: ogni livello riparte da una copia.
-    const s = cloneState(base);
-    if (propagate(s, total, maxLevel, DIFFICULTIES.map(() => 0), { done: 0 }) === "contradiction") return conflictIn(s, total);
-  }
-  return undefined;
+  const s = stateWith(input, given);
+  if (!placeRect(s, rect)) return undefined;
+  return conflictIn(s, input.rows * input.cols);
 }
