@@ -1,18 +1,18 @@
-# Pubblica il gioco su GitHub Pages a ogni push su main (dopo test, test dell'interfaccia e build).
+# Controlli a ogni push su qualsiasi branch e a ogni pull request: test, test dell'interfaccia
+# e build. Solo un push su main, se tutto passa, pubblica il gioco su GitHub Pages.
 name: GitHub Pages
 
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# Un push nuovo sullo stesso branch annulla i controlli ancora in corso del precedente.
 concurrency:
-  group: pages
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,12 +37,20 @@ jobs:
           retention-days: 7
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
