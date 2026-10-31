@@ -466,6 +466,29 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: 
   return best?.found;
 }
 
+/** Tetto per chiamata di solvableByDeduction: largo, conta che la deduzione esista. */
+const SIMULATION_CALL_MS = 2000;
+
+/**
+ * Si arriva in fondo con le sole deduzioni dei suggerimenti (nextDeduction), partendo dalla
+ * griglia vuota e posando ogni volta il pezzo dedotto? Basta questa partita: posare pezzi
+ * giusti non toglie deduzioni (le forme scartate restano scartate, i pezzi obbligati restano
+ * obbligati o hanno ormai una forma sola), quindi qualunque pezzo giusto abbia posato il
+ * giocatore, la prima deduzione di questa sequenza che gli manca vale ancora. Il gioco al
+ * clic ha un tetto più basso (DEDUCTION_MS): su un dispositivo lento può ancora ripiegare.
+ */
+export function solvableByDeduction(input: SolveInput, solution: readonly Rect[]): boolean {
+  const given: Rect[] = [];
+  let last: Rect | undefined;
+  while (given.length < solution.length) {
+    const found = nextDeduction(input, given, last, SIMULATION_CALL_MS);
+    if (!found || !solution.some((rect) => sameRect(rect, found.rect))) return false;
+    given.push(found.rect);
+    last = found.rect;
+  }
+  return true;
+}
+
 /**
  * Perché rect (che rispetta il suo indizio) è sbagliato: posato sopra ai pezzi corretti
  * given, la contraddizione che si vede subito. Solo quella: una che arriva seguendo altri

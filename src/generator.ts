@@ -1,9 +1,10 @@
-import { grade } from "./grader";
+import { grade, solvableByDeduction } from "./grader";
 import { createRng, pick, randomSeed, type Rng } from "./rng";
 import { solve, type SolveInput } from "./solver";
 import {
   area,
   difficultyLevel,
+  hintsExplained,
   sameRect,
   shapeOf,
   DIFFICULTIES,
@@ -471,6 +472,8 @@ export function generate(options: GenerateOptions): GenerateResult {
   };
   const deadline = options.timeLimitMs === undefined ? Infinity : Date.now() + options.timeLimitMs;
   const outOfTime = () => Date.now() > deadline;
+  // Dove i suggerimenti spiegano, il puzzle deve risolversi con le loro sole deduzioni.
+  const explained = hintsExplained(options.variant ?? "classic", target);
 
   let best: { result: GenerateResult; distance: number } | undefined;
   // Almeno un candidato anche a tempo scaduto.
@@ -482,7 +485,9 @@ export function generate(options: GenerateOptions): GenerateResult {
     const logical = level < DIFFICULTIES.length;
     const result: GenerateResult = { ...board, clues, solution, seed, unique, logical, difficulty: labelFor(level) };
     // Un puzzle non unico è sempre l'ultima scelta, uno che il valutatore non chiude la penultima.
-    const distance = Math.abs(level - targetLevel) + (logical ? 0 : 50) + (unique ? 0 : 100);
+    // Del livello giusto ma non risolvibile con i suggerimenti: meglio di un livello sbagliato.
+    let distance = Math.abs(level - targetLevel) + (logical ? 0 : 50) + (unique ? 0 : 100);
+    if (distance === 0 && explained && !solvableByDeduction({ ...board, clues }, solution)) distance = 0.5;
     if (distance === 0) return result;
     if (!best || distance < best.distance) best = { result, distance };
   }

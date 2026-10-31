@@ -352,6 +352,34 @@ describe("Game", () => {
     };
     expect(new Game(ambiguous).hint(0)).toEqual({ placed: { r: 0, c: 0, h: 1, w: 2 } });
   });
+
+  describe("suggerimento limitato (Maestro, Forme Esperto)", () => {
+    it("senza gradi né attesa: toglie gli errori o posa un pezzo, al massimo hintLimit volte", () => {
+      const game = new Game(puzzle, { hintLimit: 2 });
+      expect(game.hintsLeft).toBe(2);
+      game.place({ r: 0, c: 1, h: 1, w: 2 }); // sbagliato
+      expect(game.hint(0)).toEqual({ quiet: true, removed: [{ r: 0, c: 1, h: 1, w: 2 }], left: 1 });
+      expect(game.placed).toHaveLength(0);
+      // Subito un pezzo, senza indizio da guardare né motivo, e senza attesa.
+      const second = game.hint(0);
+      expect(second).toMatchObject({ quiet: true, removed: [], left: 0 });
+      expect(game.placed).toHaveLength(1);
+      expect(puzzle.solution).toContainEqual(game.placed[0]);
+      expect(game.hint(1)).toBeUndefined();
+      expect(game.placed).toHaveLength(1);
+      expect(game.helped).toBe(true);
+    });
+
+    it("il conto sopravvive al salvataggio", () => {
+      const game = new Game(puzzle, { hintLimit: 2 });
+      game.hint(0);
+      expect(Game.restore(puzzle, game.snapshot(), { hintLimit: 2 }).hintsLeft).toBe(1);
+    });
+
+    it("senza limite il suggerimento resta a gradi", () => {
+      expect(new Game(puzzle).hintsLeft).toBeUndefined();
+    });
+  });
 });
 
 describe("Timer", () => {

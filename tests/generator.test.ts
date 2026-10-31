@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { generate, partition } from "../src/generator";
 import { createRng } from "../src/rng";
-import { grade } from "../src/grader";
+import { grade, solvableByDeduction } from "../src/grader";
 import { countSolutions } from "../src/solver";
-import { contains, fits, type Difficulty, type Puzzle, type Rect } from "../src/types";
+import { contains, fits, hintsExplained, type Difficulty, type Puzzle, type Rect, type Variant } from "../src/types";
 
 const SIZES: [number, number][] = [
   [4, 4],
@@ -166,6 +166,26 @@ describe("generate con difficoltà", () => {
     expect(generate({ rows: 8, cols: 8, seed: 1 }).blocked).toBeUndefined();
     expect(generate({ rows: 8, cols: 8, seed: 1, variant: "shapes" }).blocked).toBeUndefined();
   });
+
+  it("dove i suggerimenti spiegano, il puzzle si risolve con le loro sole deduzioni", () => {
+    const cases: [number, number, Difficulty, Variant][] = [
+      [8, 8, "hard", "classic"],
+      [10, 10, "expert", "classic"],
+      [8, 8, "hard", "shapes"],
+      [8, 12, "hard", "shapes"],
+      [10, 10, "expert", "blocked"],
+    ];
+    for (const [rows, cols, difficulty, variant] of cases) {
+      expect(hintsExplained(variant, difficulty)).toBe(true);
+      for (let seed = 1; seed <= 3; seed++) {
+        const p = generate({ rows, cols, difficulty, variant, seed, maxCandidates: 1000 });
+        expect(p.difficulty, `${rows}×${cols} ${variant} ${difficulty} seed ${seed}`).toBe(difficulty);
+        expect(solvableByDeduction(p, p.solution), `${rows}×${cols} ${variant} ${difficulty} seed ${seed}`).toBe(true);
+      }
+    }
+    expect(hintsExplained("classic", "master")).toBe(false);
+    expect(hintsExplained("shapes", "expert")).toBe(false);
+  }, 120_000);
 
   it("rispetta il limite di tempo", () => {
     const start = Date.now();

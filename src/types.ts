@@ -100,8 +100,11 @@ export function availableDifficulties(size: Size): Difficulty[] {
   return DIFFICULTIES.map((d) => d.id).filter((id) => Math.min(size.rows, size.cols) >= minSide(id));
 }
 
-/** Tempo di generazione concesso per livello, in ms. */
-export const TIME_LIMITS: Record<Difficulty, number> = { easy: 1000, medium: 1000, hard: 1500, expert: 3000, master: 10000 };
+/**
+ * Tempo di generazione concesso per livello, in ms. Difficile 3 s (era 1,5): col filtro dei
+ * suggerimenti (hintsExplained) sul 15×15 Forme ne serve di più; le altre griglie restano sotto 0,35 s.
+ */
+export const TIME_LIMITS: Record<Difficulty, number> = { easy: 1000, medium: 1000, hard: 3000, expert: 3000, master: 10000 };
 
 export function difficultyLevel(d: Difficulty): number {
   return DIFFICULTIES.findIndex((x) => x.id === d);
@@ -114,6 +117,21 @@ export function isDifficulty(v: unknown): v is Difficulty {
 export function difficultyLabel(d: Difficulty): string {
   return DIFFICULTIES[difficultyLevel(d)]!.label;
 }
+
+/**
+ * Se il suggerimento spiega (a gradi, con il motivo) su questo livello e variante. Qui il
+ * generatore tiene solo puzzle che si risolvono fino in fondo con le deduzioni dei
+ * suggerimenti (solvableByDeduction). Misurato il 2026-10-31 (10 puzzle per griglia): passa
+ * l'83% o più dei Classico e Caselle nere fino a Esperto e il 72% delle Forme a Difficile,
+ * ma solo il 23–60% a Maestro e il 21% delle Forme a Esperto (0% sul 15×15). Lì, deciso
+ * dall'utente, il suggerimento non spiega e si usa al massimo HINT_LIMIT volte.
+ */
+export function hintsExplained(variant: Variant, difficulty: Difficulty): boolean {
+  return difficulty !== "master" && !(variant === "shapes" && difficulty === "expert");
+}
+
+/** Suggerimenti per partita dove non spiegano (vedi hintsExplained), deciso dall'utente. */
+export const HINT_LIMIT = 2;
 
 export function clampSize(n: number): number {
   if (!Number.isFinite(n)) return MIN_SIZE;

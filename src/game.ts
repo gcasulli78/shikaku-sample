@@ -50,9 +50,12 @@ export type WrongReason =
  * del suo indizio (placed), o, durante l'attesa, al suggerimento dopo. Un pezzo posato
  * senza motivo viene dalla soluzione: quando le regole del valutatore non bastano, o (fix)
  * al posto di un rettangolo sbagliato di quell'indizio. wait: il pezzo non si posa ancora,
- * mancano tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito).
+ * mancano tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito). quiet: suggerimento
+ * limitato (hintLimit), senza gradi né spiegazioni: toglie gli errori o posa un pezzo; left,
+ * quanti ne restano.
  */
 export type Hint =
+  | { quiet: true; removed: Rect[]; placed?: Rect; left: number }
   | { removed: Rect[]; wrong: { rect: Rect; why: WrongReason }; placed?: Rect }
   | { wait: number }
   | { focus: Reason }
@@ -77,6 +80,11 @@ export interface SavedGame {
   helped?: boolean;
 }
 
+export interface GameOptions {
+  hintCooldown?: number;
+  hintLimit?: number;
+}
+
 export class Game {
   readonly puzzle: Puzzle;
   private rects: Rect[] = [];
@@ -93,12 +101,18 @@ export class Game {
   private lastMove: Rect | undefined;
   /** Attesa tra due pezzi suggeriti, in ms: 0 nel tutorial. */
   readonly hintCooldown: number;
+  /**
+   * Suggerimenti per partita, se limitati (Maestro e Forme Esperto, vedi hintsExplained):
+   * allora niente gradi, spiegazioni né attesa. undefined: senza limite.
+   */
+  readonly hintLimit: number | undefined;
   /** Caselle nere, una per cella (r * cols + c). */
   private readonly black: Uint8Array;
 
-  constructor(puzzle: Puzzle, options: { hintCooldown?: number } = {}) {
+  constructor(puzzle: Puzzle, options: GameOptions = {}) {
     this.puzzle = puzzle;
     this.hintCooldown = options.hintCooldown ?? HINT_COOLDOWN;
+    this.hintLimit = options.hintLimit;
     this.black = new Uint8Array(puzzle.rows * puzzle.cols);
     for (const idx of puzzle.blocked ?? []) this.black[idx] = 1;
   }
@@ -114,7 +128,7 @@ export class Game {
   }
 
   /** Riprende una partita salvata; i rettangoli che si sovrappongono si scartano. */
-  static restore(puzzle: Puzzle, saved: SavedGame, options: { hintCooldown?: number } = {}): Game {
+  static restore(puzzle: Puzzle, saved: SavedGame, options: GameOptions = {}): Game {
     const game = new Game(puzzle, options);
     for (const rect of saved.rects) if (game.canPlace(rect)) game.rects.push({ ...rect });
     game.hintsUsed = saved.hintsUsed;
@@ -237,6 +251,7 @@ export class Game {
    * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
    */
   hint(now: number): Hint | undefined {
+    if (this.hintLimit !== undefined) return this.quietHint();
     const wrong = this.wrong();
     if (wrong.length > 0) {
       const why = this.whyWrong(wrong[0]!);
@@ -270,6 +285,34 @@ export class Game {
     }
     const placed = this.placeHinted(rect, reason, now);
     return fix && "placed" in placed ? { ...placed, fix } : placed;
+  }
+
+  /** Suggerimenti rimasti, se limitati (undefined: senza limite). */
+  get hintsLeft(): number | undefined {
+    return this.hintLimit === undefined ? undefined : Math.max(0, this.hintLimit - this.hintsUsed);
+  }
+
+  /**
+   * Suggerimento limitato (deciso dall'utente per Maestro e Forme Esperto): un uso toglie
+   * tutti i rettangoli sbagliati, oppure, se non ce ne sono, posa un pezzo; nessuna
+   * spiegazione. Il pezzo è quello dedotto se c'è (vicino a dove si sta ragionando),
+   * altrimenti il mancante più vicino all'ultima mossa. undefined se finiti o già risolto.
+   */
+  private quietHint(): Hint | undefined {
+    if (this.hintsLeft === 0) return undefined;
+    const wrong = this.wrong();
+    if (wrong.length > 0) {
+      this.apply({ removed: wrong, added: [] });
+      this.hintsUsed++;
+      this.helped = true;
+      return { quiet: true, removed: wrong, left: this.hintsLeft! };
+    }
+    const rect = this.deduce()?.rect ?? this.nearestMissing();
+    if (!rect) return undefined;
+    this.place(rect);
+    this.hintsUsed++;
+    this.helped = true;
+    return { quiet: true, removed: [], placed: rect, left: this.hintsLeft! };
   }
 
   /** Posa il pezzo suggerito, se dall'ultimo sono passati HINT_COOLDOWN ms di gioco. */

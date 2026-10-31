@@ -21,6 +21,8 @@ import {
   DIFFICULTIES,
   difficultyLabel,
   difficultyLevel,
+  HINT_LIMIT,
+  hintsExplained,
   MAX_SIZE,
   MIN_SIZE,
   minSide,
@@ -230,7 +232,17 @@ function secondsLeft(ms: number): string {
 /** Un suggerimento mostrato (l'attesa non si mostra come suggerimento, ma come avviso). */
 type ShownHint = Exclude<Hint, { wait: number }>;
 
+/** "Ne resta 1." / "Suggerimenti finiti." dopo un suggerimento limitato. */
+function leftText(left: number): string {
+  return left === 0 ? "Suggerimenti finiti." : left === 1 ? "Ne resta 1." : `Ne restano ${left}.`;
+}
+
 function hintText(hint: ShownHint, frame: number, name: Namer): string {
+  if ("quiet" in hint) {
+    const n = hint.removed.length;
+    const what = hint.placed ? "Ecco un pezzo." : n === 1 ? "Tolto un rettangolo sbagliato." : `Tolti ${n} rettangoli sbagliati.`;
+    return `${what} ${leftText(hint.left)}`;
+  }
   if ("removed" in hint) {
     if (hint.wrong.why.kind === "misplaced") {
       // Il motivo non si vede dalla griglia: niente frase, il pezzo giusto.
@@ -256,6 +268,7 @@ function hintText(hint: ShownHint, frame: number, name: Namer): string {
 
 /** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva (la spiegazione ha le sue). */
 function hintSpots(hint: ShownHint): { r: number; c: number }[] {
+  if ("quiet" in hint) return [];
   if ("removed" in hint) {
     const { why } = hint.wrong;
     return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
@@ -665,7 +678,11 @@ export function startApp(): void {
     newBtn.disabled = false;
     board.classList.remove("busy");
     const { rows, cols } = puzzle;
-    game = saved?.game ? Game.restore(puzzle, saved.game, { hintCooldown }) : new Game(puzzle, { hintCooldown });
+    // Maestro e Forme Esperto: suggerimenti limitati e senza spiegazione (non nel tutorial,
+    // che insegna proprio con le spiegazioni).
+    const tutorial = options.status !== undefined;
+    const hintLimit = tutorial || hintsExplained(variant, puzzle.difficulty) ? undefined : HINT_LIMIT;
+    game = saved?.game ? Game.restore(puzzle, saved.game, { hintCooldown, hintLimit }) : new Game(puzzle, { hintCooldown, hintLimit });
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.clues);
@@ -764,7 +781,7 @@ export function startApp(): void {
         gridArea(el, rect);
         board.append(el);
       }
-      if (lastHint.removed.length > 1) {
+      if ("wrong" in lastHint && lastHint.removed.length > 1) {
         const el = document.createElement("div");
         el.className = "hint-mark wrong";
         gridArea(el, lastHint.wrong.rect);
@@ -841,6 +858,14 @@ export function startApp(): void {
 
   /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
   const syncHintButton = () => {
+    const left = game.hintsLeft;
+    if (left !== undefined) {
+      // Suggerimento limitato: niente gradi, solo quanti ne restano.
+      const label = left === 0 ? "Suggerimenti finiti" : `Suggerimento (${left})`;
+      hintBtn.disabled = solved || left === 0;
+      if (hintBtn.textContent !== label) hintBtn.textContent = label;
+      return;
+    }
     const wait = game.hintStage === 2 ? game.cooldown(timer.elapsed()) : 0;
     const label = wait > 0 ? `${HINT_LABELS[2]} (${secondsLeft(wait)})` : HINT_LABELS[game.hintStage]!;
     hintBtn.disabled = solved || wait > 0;
