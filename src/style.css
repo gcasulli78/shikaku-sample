@@ -537,25 +537,58 @@ input,
   animation: blink 0.6s ease-in-out 3 alternate;
 }
 
-/* Spiegazione: una forma scartata dell'indizio, e i pezzi che renderebbe obbligati. */
+/* Spiegazione: la forma provata e i pezzi che renderebbe obbligati, tratteggiati nella
+   tinta del loro indizio (così "il 6 verde" si riconosce sulla griglia). */
 .ghost {
   z-index: 2;
   margin: 3px;
   border-radius: 8px;
   pointer-events: none;
-  border: 2px dashed var(--bad);
-  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  border: 2px dashed oklch(var(--rect-edge-l) 0.15 var(--h, 250));
+  background: color-mix(in oklch, oklch(var(--rect-edge-l) 0.15 var(--h, 250)) 14%, transparent);
 }
 
-.ghost.forced {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+/* La forma che si sta provando: tratteggio più spesso. */
+.ghost.tried {
+  border-width: 3px;
 }
 
-/* Spiegazione: il problema che crea la forma scartata (casella o indizio). */
+/* La casella di cui parla la frase ("la casella segnata"): neutra, né rossa né di un
+   indizio. Ferma: a ogni passo lampeggerebbe di nuovo. */
+.hint-mark.spot {
+  border: 3px solid var(--text);
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  animation: none;
+}
+
+/* L'indizio di cui parla la frase: cerchiato nella sua tinta. */
+.hint-mark.subject {
+  margin: -3px;
+  border: 4px solid oklch(var(--rect-edge-l) 0.15 var(--h, 250));
+  border-radius: 50%;
+  z-index: 5;
+  animation: none;
+}
+
+/* Spiegazione: il problema che crea la forma provata (casella o indizio), l'unica cosa in rosso. */
 .hint-mark.problem {
   border: 3px solid var(--bad);
-  background: color-mix(in srgb, var(--bad) 25%, transparent);
+  background: color-mix(in srgb, var(--bad) 30%, transparent);
+}
+
+/* Un indizio rimasto senza spazio: anello rosso spesso sopra la pastiglia. */
+.hint-mark.problem.on-clue {
+  margin: -3px;
+  border-width: 4px;
+  border-radius: 50%;
+  background: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 35%, transparent);
+  z-index: 5;
+}
+
+/* La frase della spiegazione: un tocco passa al passo dopo. */
+.status.stepper {
+  cursor: pointer;
 }
 
 /* Il rettangolo sbagliato di cui il suggerimento spiega il motivo. */
