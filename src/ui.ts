@@ -1,5 +1,6 @@
 import { formatTime, Game, Timer, type Hint, type Reason, type WrongReason } from "./game";
-import type { GenerateOptions, GenerateResult } from "./generator";
+import { partition, type GenerateOptions, type GenerateResult } from "./generator";
+import { createRng, randomSeed } from "./rng";
 import { runJob, type Job } from "./jobs";
 import { parseRecordKey, recordKey, recordWin } from "./records";
 import { moveSelection, selectionAt, selectionRect, selectionStart, startSelection, type Selection } from "./selection";
@@ -413,6 +414,88 @@ function assignHues(clues: Clue[]): number[] {
   return hues;
 }
 
+/** Una casella della griglia (le linee tratteggiate), senza il bordo esterno. */
+function gridCell(r: number, c: number, rows: number, cols: number): HTMLDivElement {
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  if (c === cols - 1) cell.classList.add("last-col");
+  if (r === rows - 1) cell.classList.add("last-row");
+  cell.style.gridArea = `${r + 1} / ${c + 1}`;
+  return cell;
+}
+
+/** Dopo quanti ms d'attesa parte l'animazione: prima niente, per non lampeggiare con i puzzle pronti. */
+const LOADER_DELAY = 250;
+/** Quanto dura il riempimento di una griglia nell'animazione, in ms. */
+const LOADER_FILL_MS = 1600;
+
+/**
+ * L'attesa di un puzzle (scelta dall'utente tra tre proposte): la griglia vuota della nuova
+ * misura si ritaglia da sola, un rettangolo colorato alla volta in ordine sparso, come se
+ * qualcuno la risolvesse; piena, svanisce e ricomincia con un altro taglio. I tagli sono
+ * casuali (partition, come fa il generatore), non c'entrano con la soluzione. Con "riduci
+ * movimento" solo la griglia vuota che pulsa piano (style.css). Restituisce lo stop.
+ */
+function startLoader(board: HTMLElement, rows: number, cols: number): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const rng = createRng(randomSeed());
+  const later = (fn: () => void, ms: number) => {
+    timer = setTimeout(() => {
+      if (!stopped) fn();
+    }, ms);
+  };
+  const round = () => {
+    const rects = partition(rows, cols, rng, undefined, true);
+    // Ordine sparso (Fisher–Yates): sembra qualcuno che ragiona, non una stampante.
+    for (let i = rects.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [rects[i], rects[j]] = [rects[j]!, rects[i]!];
+    }
+    const step = Math.min(180, Math.max(40, LOADER_FILL_MS / rects.length));
+    const offset = Math.floor(rng() * HUES.length);
+    const pieces: HTMLElement[] = [];
+    const add = (k: number) => {
+      if (k === rects.length) {
+        later(() => {
+          for (const el of pieces) el.classList.add("out");
+          later(() => {
+            for (const el of pieces) el.remove();
+            round();
+          }, 350);
+        }, 500);
+        return;
+      }
+      const el = document.createElement("div");
+      el.className = "rect valid loader-piece";
+      // Tinte a passo 3 sulle 8: due pezzi di fila non hanno mai lo stesso colore.
+      el.style.setProperty("--h", String(HUES[(offset + k * 3) % HUES.length]));
+      gridArea(el, rects[k]!);
+      board.append(el);
+      pieces.push(el);
+      later(() => add(k + 1), step);
+    };
+    add(0);
+  };
+  later(() => {
+    board.classList.remove("busy");
+    board.classList.add("loading");
+    board.style.setProperty("--rows", String(rows));
+    board.style.setProperty("--cols", String(cols));
+    const cells: HTMLElement[] = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push(gridCell(r, c, rows, cols));
+    board.replaceChildren(...cells);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) round();
+  }, LOADER_DELAY);
+  board.ariaBusy = "true";
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    board.classList.remove("loading");
+    board.ariaBusy = null;
+  };
+}
+
 function gridArea(el: HTMLElement, rect: Rect): void {
   el.style.gridArea = `${rect.r + 1} / ${rect.c + 1} / span ${rect.h} / span ${rect.w}`;
 }
@@ -474,6 +557,10 @@ export function startApp(): void {
   let difficulty: Difficulty = settings.difficulty;
   let gameVariant: Variant = settings.variant;
   let hues: number[] = [];
+  /** L'animazione d'attesa in corso (startLoader): la ferma. */
+  let stopLoader: (() => void) | undefined;
+  /** Partita appena generata: i numeri entrano con un'animazione (vedi render). */
+  let entering = false;
   /** "il 6 verde": il colore della sua pastiglia (le grigie, i "?", restano senza). */
   const nameOf: Namer = (clue, prep = "") => {
     const i = game.puzzle.clues.indexOf(clue);
@@ -643,6 +730,8 @@ export function startApp(): void {
     const id = ++request;
     newBtn.disabled = true;
     board.classList.add("busy");
+    stopLoader?.();
+    stopLoader = startLoader(board, size.rows, size.cols);
     setStatus({ text: `Generazione di un ${size.rows}×${size.cols} ${difficultyLabel(target).toLowerCase()}…` });
     const puzzle = await obtain(choice);
     if (!puzzle) return;
@@ -660,6 +749,9 @@ export function startApp(): void {
     if (chosen !== target) note = ` · ${difficultyLabel(chosen)} disponibile da ${minSide(chosen)}×${minSide(chosen)}`;
     else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (puzzle.difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
+    entering = true;
+    // Il tempo di entrare (onda al massimo 0,7 s + 0,35 s): poi i render normali.
+    setTimeout(() => (entering = false), 1200);
     startGame(puzzle, variant, { note });
     prefetch(choice);
   };
@@ -676,6 +768,8 @@ export function startApp(): void {
     const { note = "", saved, hintCooldown } = options;
     request++; // una generazione ancora in corso non sostituisce questa partita
     newBtn.disabled = false;
+    stopLoader?.();
+    stopLoader = undefined;
     board.classList.remove("busy");
     const { rows, cols } = puzzle;
     // Maestro e Forme Esperto: suggerimenti limitati e senza spiegazione (non nel tutorial,
@@ -751,12 +845,8 @@ export function startApp(): void {
     // Linee della griglia sotto i rettangoli, numeri sopra.
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const cell = document.createElement("div");
-        cell.className = "cell";
-        if (c === cols - 1) cell.classList.add("last-col");
-        if (r === rows - 1) cell.classList.add("last-row");
+        const cell = gridCell(r, c, rows, cols);
         if (game.isBlocked(r, c)) cell.classList.add("black");
-        cell.style.gridArea = `${r + 1} / ${c + 1}`;
         board.append(cell);
       }
     }
@@ -842,6 +932,11 @@ export function startApp(): void {
       const pill = document.createElement("span");
       pill.className = `pill ${clue.shape ?? (clue.n === undefined ? "any" : "")}`.trimEnd();
       pill.style.setProperty("--h", String(hues[i]));
+      // Partita appena generata: i numeri entrano a onda, dall'angolo in alto a sinistra.
+      if (entering) {
+        pill.classList.add("enter");
+        pill.style.animationDelay = `${Math.min((clue.r + clue.c) * 35, 700)}ms`;
+      }
       pill.textContent = clue.n !== undefined ? String(clue.n) : clue.shape ? "" : "?";
       el.append(pill);
       board.append(el);

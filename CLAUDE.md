@@ -74,6 +74,10 @@ Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) 
 - In `src/types.ts`: `MIN_SIDE` (Esperto da 7, Maestro da 8, sul lato minore) e `TIME_LIMITS`. Allo scadere del tempo si propone il puzzle più vicino, preferendo un livello sotto a uno sopra.
 - Esperto e Maestro: mentre si gioca, un secondo Worker prepara il puzzle successivo e lo salva in `localStorage` (`shikaku:ready`).
 
+## Attesa di un puzzle
+
+- `startLoader` (`ui.ts`, scelta dall'utente tra tre proposte): dopo `LOADER_DELAY` (250 ms, così i puzzle pronti non fanno lampeggiare niente) la griglia prende la nuova misura, vuota, e si ritaglia da sola: rettangoli colorati uno alla volta in ordine sparso (`partition`, tagli casuali che non c'entrano con la soluzione), poi svaniscono e si ricomincia. All'arrivo del puzzle i numeri entrano a onda (`entering`, `.pill.enter`). Con "riduci movimento" solo la griglia vuota che pulsa piano. `aria-busy` sulla griglia durante l'attesa.
+
 ## Tutorial
 
 - `tutorial.ts`: griglie scritte a mano, una per regola (più una per variante); i test (`tests/tutorial.test.ts`) verificano soluzione unica, livello del valutatore e prima regola usata. Se si cambiano le regole del valutatore, ricontrollare che ogni griglia insegni ancora la sua.

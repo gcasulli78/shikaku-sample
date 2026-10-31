@@ -340,6 +340,62 @@ input,
   transition: opacity 0.2s;
 }
 
+/* Attesa di un puzzle (startLoader in ui.ts): la griglia si ritaglia da sola. */
+.board.loading {
+  pointer-events: none;
+  cursor: progress;
+}
+
+.loader-piece {
+  animation: piece-in 0.35s ease-out both;
+}
+
+.loader-piece.out {
+  animation: piece-out 0.3s ease-in forwards;
+}
+
+@keyframes piece-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes piece-out {
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* I numeri della partita nuova entrano a onda (ritardo per casella in ui.ts). */
+.pill.enter {
+  animation: pill-in 0.35s cubic-bezier(0.3, 1.5, 0.6, 1) both;
+}
+
+@keyframes pill-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board.loading {
+    animation: breathe 1.6s ease-in-out infinite alternate;
+  }
+
+  .pill.enter {
+    animation: none;
+  }
+}
+
+@keyframes breathe {
+  to {
+    opacity: 0.6;
+  }
+}
+
 .board {
   --cols: 5;
   --rows: 5;
