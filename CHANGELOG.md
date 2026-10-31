@@ -4,6 +4,11 @@ Le versioni seguono lo schema x.y.z: la **y** sale con una funzione nuova, la **
 
 ## [Non ancora pubblicato]
 
+## [0.5.1] - 2026-10-31
+
+### Cambiato
+- Semplificato il codice dei limiti di suggerimenti e verifiche. Il gioco non cambia.
+
 ## [0.5.0] - 2026-10-31
 
 ### Cambiato
@@ -108,7 +113,8 @@ Prima versione, sviluppata dal 27 al 29 ottobre.
 ### Sicurezza
 - Dati salvati nel browser sempre controllati, link aperti nel Worker con un limite di tempo, Content Security Policy.
 
-[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.5.0...HEAD
+[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/gcasulli78/shikaku-sample/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.9...v0.5.0
 [0.4.9]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.7...v0.4.8

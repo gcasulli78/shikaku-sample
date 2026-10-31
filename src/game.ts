@@ -281,8 +281,8 @@ export class Game {
    * nello stesso clic conta una volta sola.
    */
   hint(now: number): Hint | undefined {
-    if (this.quiet) return this.quietHint();
     if (this.hintsLeft === 0) return undefined;
+    if (this.quiet) return this.quietHint();
     const wrong = this.wrong();
     if (wrong.length > 0) {
       const why = this.whyWrong(wrong[0]!);
@@ -297,7 +297,9 @@ export class Game {
         this.pending = { rect, fix: why.clue, stage: 2 };
         return removed;
       }
-      this.placeHinted(rect, undefined, now, false);
+      // Non passa da placeHinted: l'attesa è già controllata e questo clic si è già contato.
+      this.lastPlacedAt = now;
+      this.place(rect);
       return { ...removed, placed: rect };
     }
     const missing = this.nearestMissing();
@@ -327,10 +329,9 @@ export class Game {
    * Suggerimento senza spiegazioni (deciso dall'utente per Maestro e Forme Esperto): un uso toglie
    * tutti i rettangoli sbagliati, oppure, se non ce ne sono, posa un pezzo; nessuna
    * spiegazione. Il pezzo è quello dedotto se c'è (vicino a dove si sta ragionando),
-   * altrimenti il mancante più vicino all'ultima mossa. undefined se finiti o già risolto.
+   * altrimenti il mancante più vicino all'ultima mossa. undefined se già risolto.
    */
   private quietHint(): Hint | undefined {
-    if (this.hintsLeft === 0) return undefined;
     const wrong = this.wrong();
     if (wrong.length > 0) {
       this.apply({ removed: wrong, added: [] });
@@ -347,10 +348,10 @@ export class Game {
   }
 
   /** Posa il pezzo suggerito, se dall'ultimo sono passati HINT_COOLDOWN ms di gioco. */
-  private placeHinted(rect: Rect, reason: Reason | undefined, now: number, count = true): Hint {
+  private placeHinted(rect: Rect, reason: Reason | undefined, now: number): Hint {
     const wait = this.cooldown(now);
     if (wait > 0) return { wait };
-    if (count) this.hintsUsed++;
+    this.hintsUsed++;
     this.lastPlacedAt = now;
     this.place(rect);
     return reason ? { placed: rect, reason } : { placed: rect };

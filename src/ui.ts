@@ -357,16 +357,15 @@ export function startApp(): void {
     // Suggerimenti e verifiche limitati per livello; a Maestro e Forme Esperto il suggerimento
     // non spiega. Nel tutorial niente limiti: insegna proprio con le spiegazioni.
     const tutorial = options.status !== undefined;
-    const limits = tutorial
-      ? {}
+    const gameOptions = tutorial
+      ? { hintCooldown }
       : {
+          hintCooldown,
           hintLimit: HINT_LIMITS[puzzle.difficulty],
           checkLimit: CHECK_LIMITS[puzzle.difficulty],
           quiet: !hintsExplained(variant, puzzle.difficulty),
         };
-    game = saved?.game
-      ? Game.restore(puzzle, saved.game, { hintCooldown, ...limits })
-      : new Game(puzzle, { hintCooldown, ...limits });
+    game = saved?.game ? Game.restore(puzzle, saved.game, gameOptions) : new Game(puzzle, gameOptions);
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.clues);
@@ -550,14 +549,14 @@ export function startApp(): void {
   /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
   const syncHintButton = () => {
     const left = game.hintsLeft;
-    if (left === 0 || (left !== undefined && (game.quiet || game.hintStage === 0))) {
-      // Limitato: all'inizio di un suggerimento (o sempre, se non spiega) quanti ne restano.
+    if (left !== undefined && (left === 0 || game.hintStage === 0)) {
+      // Con un limite, al grado 0 quanti ne restano (senza spiegazioni il grado resta 0).
       const label = left === 0 ? "Suggerimenti finiti" : `${HINT_LABELS[0]} (${left})`;
       hintBtn.disabled = solved || left === 0;
       if (hintBtn.textContent !== label) hintBtn.textContent = label;
       return;
     }
-    const wait = game.hintStage === 2 && !game.quiet ? game.cooldown(timer.elapsed()) : 0;
+    const wait = game.hintStage === 2 ? game.cooldown(timer.elapsed()) : 0;
     const label = wait > 0 ? `${HINT_LABELS[2]} (${secondsLeft(wait)})` : HINT_LABELS[game.hintStage]!;
     hintBtn.disabled = solved || wait > 0;
     // Chiamata dal cronometro 4 volte al secondo: si scrive solo se cambia.
