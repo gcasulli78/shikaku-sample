@@ -5,7 +5,8 @@ Gioco Shikaku nel browser, per uso personale e con amici. Testi dell'interfaccia
 ## Comandi
 
 ```sh
-npm test            # Vitest
+npm test            # Vitest (logica)
+npm run test:e2e    # Playwright: interfaccia in Chromium, WebKit e iPhone (fa da sé la build)
 npm run typecheck   # tsc --noEmit
 npm run build       # dist/index.html, file unico
 npm run dev
@@ -99,5 +100,6 @@ Se si cambiano regole o profili, **prima misurare** su più seed e dimensioni (7
 
 - Prima di modifiche importanti presentare il piano e aspettare la conferma.
 - Per le domande aperte rispondere a parole, non con menu a scelta multipla.
-- Dopo una modifica: typecheck, test e build. Per l'interfaccia, prova in Edge (Playwright) del file `dist/index.html`.
+- Dopo una modifica: typecheck, test e build. Per l'interfaccia `npm run test:e2e` (`e2e/`, Playwright: Chromium, WebKit, iPhone), che gira anche nella CI prima della pubblicazione; un comportamento nuovo dell'interfaccia va coperto lì. Prima volta su un computer: `npx playwright install chromium webkit`. Un test nuovo va visto fallire almeno una volta (il primo controllo del fallback colori passava anche senza fallback: il CSS compresso scrive `@supports not (color:oklch(0 0 0))` senza spazi).
+- Colori: `oklch()` con dentro una `var()`, su un browser che non lo conosce, non ricade sulla regola precedente ma diventa trasparente. Per questo `tint()` (`ui.ts`) dà anche `--hh` (la tinta HSL equivalente) e `style.css` ha un blocco `@supports not (color: oklch(0 0 0))`. Una regola nuova con `oklch(var(...))` va aggiunta anche lì.
 - Versione x.y.z in `package.json`, mostrata in fondo alla pagina ("Versione 0.2.0", da `__APP_VERSION__` in `vite.config.ts`): chiesta dall'utente per sapere se il sito è aggiornato. A ogni push su main si alza: patch per correzioni, minor per funzioni nuove.

@@ -393,6 +393,18 @@ const NEXT_THEME: Record<Theme, Theme> = { auto: "light", light: "dark", dark: "
 const HUES = [250, 150, 55, 320, 25, 195, 95, 285];
 
 /**
+ * La stessa tinta in HSL, per i browser senza oklch() (Safari prima di 15.4, Firefox prima
+ * di 113): calcolata convertendo il colore della pastiglia. Vedi @supports in style.css.
+ */
+const HSL_HUES: Record<number, number> = { 250: 207, 150: 146, 55: 28, 320: 289, 25: 2, 195: 181, 95: 47, 285: 246 };
+
+/** Dà a un elemento la tinta di un indizio: --h per oklch(), --hh per l'alternativa HSL. */
+function tint(el: HTMLElement, hue: number): void {
+  el.style.setProperty("--h", String(hue));
+  el.style.setProperty("--hh", String(HSL_HUES[hue] ?? hue));
+}
+
+/**
  * Una tinta per indizio, diversa da quelle degli indizi vicini (entro tre caselle), così
  * due pastiglie uguali non stanno accanto. Dipende solo dalla posizione degli indizi, non
  * dalla soluzione: i colori non devono suggerire niente.
@@ -469,7 +481,7 @@ function startLoader(board: HTMLElement, rows: number, cols: number): () => void
       const el = document.createElement("div");
       el.className = "rect valid loader-piece";
       // Tinte a passo 3 sulle 8: due pezzi di fila non hanno mai lo stesso colore.
-      el.style.setProperty("--h", String(HUES[(offset + k * 3) % HUES.length]));
+      tint(el, HUES[(offset + k * 3) % HUES.length]!);
       gridArea(el, rects[k]!);
       board.append(el);
       pieces.push(el);
@@ -860,7 +872,7 @@ export function startApp(): void {
       gridArea(el, rect);
       const status = game.status(rect);
       if (status !== "open") el.classList.add(status);
-      if (status === "valid") el.style.setProperty("--h", String(hues[clues.indexOf(game.cluesIn(rect)[0]!)]));
+      if (status === "valid") tint(el, hues[clues.indexOf(game.cluesIn(rect)[0]!)]!);
       if (lastHint && "placed" in lastHint && lastHint.placed && sameRect(rect, lastHint.placed)) el.classList.add("hinted");
       board.append(el);
     });
@@ -889,11 +901,11 @@ export function startApp(): void {
     if (lastHint && "explain" in lastHint) {
       const frames = explainFrames(lastHint.explain, nameOf);
       const frame = frames[explainFrame % frames.length]!;
-      const hueOf = (clue: Clue) => String(hues[clues.indexOf(clue)] ?? 250);
+      const hueOf = (clue: Clue) => hues[clues.indexOf(clue)] ?? 250;
       for (const piece of [...(frame.ghost ? [frame.ghost] : []), ...frame.chain]) {
         const el = document.createElement("div");
         el.className = piece === frame.ghost ? "ghost tried" : "ghost";
-        el.style.setProperty("--h", hueOf(piece.clue));
+        tint(el, hueOf(piece.clue));
         gridArea(el, piece.rect);
         board.append(el);
       }
@@ -906,7 +918,7 @@ export function startApp(): void {
       if (frame.subject) {
         const el = document.createElement("div");
         el.className = "hint-mark subject";
-        el.style.setProperty("--h", hueOf(frame.subject));
+        tint(el, hueOf(frame.subject));
         cellArea(el, frame.subject.r, frame.subject.c);
         board.append(el);
       }
@@ -934,7 +946,7 @@ export function startApp(): void {
       // La forma della pastiglia dice il vincolo; cerchio con solo il numero, grigia col "?".
       const pill = document.createElement("span");
       pill.className = `pill ${clue.shape ?? (clue.n === undefined ? "any" : "")}`.trimEnd();
-      pill.style.setProperty("--h", String(hues[i]));
+      tint(pill, hues[i]!);
       // Partita appena generata: i numeri entrano a onda, dall'angolo in alto a sinistra.
       if (entering) {
         pill.classList.add("enter");

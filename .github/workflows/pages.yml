@@ -1,4 +1,4 @@
-# Pubblica il gioco su GitHub Pages a ogni push su main (dopo test e build).
+# Pubblica il gioco su GitHub Pages a ogni push su main (dopo test, test dell'interfaccia e build).
 name: GitHub Pages
 
 on:
@@ -26,6 +26,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # Test dell'interfaccia in Chromium, WebKit (Safari) e iPhone: si pubblica solo se passano.
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -11,6 +11,9 @@
   --rect-fill-l: 0.92;
   --rect-fill-c: 0.05;
   --rect-edge-l: 0.62;
+  /* Alternativa HSL dei rettangoli per i browser senza oklch() (vedi @supports in fondo). */
+  --fb-fill-s: 70%;
+  --fb-fill-l: 89%;
   --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 6%);
   /* Pastiglie degli indizi: luminosità uguale per tutte le tinte (OKLCH), così il numero
      bianco ha lo stesso contrasto su ogni colore. */
@@ -34,6 +37,8 @@
     --rect-fill-l: 0.33;
     --rect-fill-c: 0.07;
     --rect-edge-l: 0.66;
+    --fb-fill-s: 40%;
+    --fb-fill-l: 20%;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     --black-cell: #050607;
     color-scheme: dark;
@@ -53,6 +58,8 @@
   --rect-fill-l: 0.33;
   --rect-fill-c: 0.07;
   --rect-edge-l: 0.66;
+  --fb-fill-s: 40%;
+  --fb-fill-l: 20%;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%);
   --black-cell: #050607;
   color-scheme: dark;
@@ -828,5 +835,33 @@ dialog#records {
 
   .rect.removed {
     animation: vanish 0.8s step-end forwards;
+  }
+}
+
+/* Browser senza oklch() (Safari prima di 15.4, Firefox prima di 113): con una var() dentro,
+   la regola oklch() non ricade su quella precedente ma diventa trasparente, e il numero
+   bianco della pastiglia sparirebbe. Qui le stesse tinte in HSL (--hh, da tint() in ui.ts).
+   color-mix() non ha alternativa: dove manca lo sfondo resta trasparente, i bordi restano. */
+@supports not (color: oklch(0 0 0)) {
+  .pill {
+    background: hsl(var(--hh, 207) 60% 42%);
+  }
+
+  .pill.any {
+    background: #6b6b6b;
+  }
+
+  .rect.valid {
+    border-color: hsl(var(--hh) 50% 50%);
+    background: hsl(var(--hh) var(--fb-fill-s) var(--fb-fill-l));
+  }
+
+  .ghost {
+    border-color: hsl(var(--hh, 207) 50% 50%);
+    background: none;
+  }
+
+  .hint-mark.subject {
+    border-color: hsl(var(--hh, 207) 50% 50%);
   }
 }

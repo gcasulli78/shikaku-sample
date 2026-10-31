@@ -8,7 +8,8 @@ Puzzle generati a caso con soluzione unica garantita, tutto lato client (nessun 
 ```sh
 npm install        # una volta sola
 npm run dev        # sviluppo con ricarica automatica
-npm test           # test (Vitest)
+npm test           # test della logica (Vitest)
+npm run test:e2e   # test dell'interfaccia in Chromium, WebKit e iPhone (Playwright)
 npm run typecheck  # controllo tipi
 npm run build      # crea dist/index.html, file unico da aprire con doppio clic o condividere
 ```
