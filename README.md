@@ -43,11 +43,12 @@ La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il D
 
 ## Come si gioca
 
-Il pulsante **?** apre un tutorial di sei griglie piccole, una per regola: le regole del gioco, la casella che può raggiungere un solo numero, niente buchi, le ipotesi, le varianti Forme e Caselle nere. Si giocano sulla griglia vera, con il suggerimento come aiuto; uscendo si riprende la partita di prima.
+Il pulsante **?** apre un tutorial di sette griglie piccole, una per regola: le regole del gioco, la casella che può raggiungere un solo numero, niente buchi, le ipotesi, le varianti Forme e Caselle nere. Si giocano sulla griglia vera, con il suggerimento come aiuto; uscendo si riprende la partita di prima.
 
 ## Aiuti
 
-- **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 vuole 8 caselle, qui ce ne sono 6" o "così il 4 non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati. Tra un pezzo suggerito e il successivo devono passare 15 secondi (il pulsante mostra il conto alla rovescia); indizio e ragionamento restano sempre disponibili.
+- **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 verde vuole 8 caselle, qui ce ne sono 6" o "così il 4 blu non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il ragionamento si vede sulla griglia **a passi**, una cosa per volta (ogni 3,5 secondi, o toccando la frase): "Proviamo il 6 rosso qui, nel tratteggio" → "Allora il 12 viola ha un posto solo: questo" → "Ma così l'8 verde non ha più spazio" → "Quindi il 6 rosso va nell'altro modo". I numeri si chiamano con il colore della loro pastiglia. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati, e fino a Esperto (nelle Forme fino a Difficile) ogni puzzle si risolve fino in fondo così. Tra un pezzo suggerito e il successivo devono passare 15 secondi (il pulsante mostra il conto alla rovescia); indizio e ragionamento restano sempre disponibili.
+- **Suggerimento a Maestro e nelle Forme a Esperto**: lì il ragionamento sarebbe troppo lungo da mostrare, quindi il suggerimento si usa al massimo 2 volte a partita, senza spiegazioni: toglie i rettangoli sbagliati oppure posa un pezzo.
 - **Verifica**: dice solo se ci sono errori e quanti, senza indicarli.
 
 ## Tastiera
@@ -57,6 +58,8 @@ Frecce per muovere il cursore, Invio per fissare un angolo e poi per posare il r
 ## Partite, record e link
 
 - La partita in corso si salva nel browser a ogni mossa: riaprendo la pagina si riprende da lì, con il tempo trascorso.
+- Il cronometro parte quando la griglia è pronta e conta il tempo a pagina aperta: non si ferma con la scheda nascosta o il telefono bloccato, solo alla vittoria; a pagina chiusa si ferma e riprende dal tempo salvato.
+- Mentre si genera un puzzle, la griglia vuota si ritaglia da sola in rettangoli colorati (tagli casuali, non la soluzione).
 - Record personali (pulsante con la coppa): partite vinte, tempo migliore e tempo migliore senza aiuti, per griglia, livello e variante.
 - **Condividi** copia un link (sul telefono apre il menu di condivisione): chi lo apre gioca lo stesso puzzle. Il link contiene gli indizi, non il seed, quindi non dipende dalla velocità del dispositivo né dalle versioni del generatore.
 
@@ -98,3 +101,16 @@ Il livello è la regola più avanzata che serve per risolvere il puzzle:
 Esperto è disponibile da 7×7 in su, Maestro da 8×8 (lato minore; `MIN_SIDE` in `src/types.ts`).
 La generazione ha un tempo massimo (`TIME_LIMITS`): se scade, si propone il puzzle più vicino e la pagina lo segnala.
 Per Esperto e Maestro, mentre si gioca un secondo Worker prepara già il puzzle successivo e lo salva nel browser, così la partita dopo parte subito.
+
+## Sviluppo
+
+- **Test**: `npm test` per la logica (Vitest, `tests/`), `npm run test:e2e` per l'interfaccia in Chromium, WebKit (Safari) e iPhone (Playwright, `e2e/`; la prima volta `npx playwright install chromium webkit`).
+- **Stile**: `npm run lint` e `npm run format` (Biome).
+- **Misure**: `npm run measure` rifà le misure di generatore e suggerimenti da cui vengono soglie e tempi.
+- **CI** (GitHub Actions): ogni branch e pull request passano da stile, test, test dell'interfaccia e build; solo `main` viene pubblicato su GitHub Pages.
+- **Versioni**: x.y.z in `package.json`, mostrata in fondo alla pagina, con il tag `vX.Y.Z` e la voce in [CHANGELOG.md](CHANGELOG.md).
+- **Note di progetto**: decisioni, misure e motivi in [CLAUDE.md](CLAUDE.md).
+
+## Licenza
+
+[MIT](LICENSE): il codice si può riusare, modificare e ridistribuire, anche in altri progetti, purché resti la nota di copyright. Shikaku è il nome di un genere di rompicapo: la licenza riguarda questo codice, non il gioco.
