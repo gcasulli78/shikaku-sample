@@ -40,7 +40,15 @@ describe("Game", () => {
   });
 
   it("intent: tap toglie o chiude un 1, trascinamento posa solo se libero", () => {
-    const ones: Puzzle = { rows: 1, cols: 3, clues: [{ r: 0, c: 0, n: 1 }, { r: 0, c: 2, n: 2 }], solution: [] };
+    const ones: Puzzle = {
+      rows: 1,
+      cols: 3,
+      clues: [
+        { r: 0, c: 0, n: 1 },
+        { r: 0, c: 2, n: 2 },
+      ],
+      solution: [],
+    };
     const game = new Game(ones);
     expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // c'è il numero 1
     expect(game.intent({ r: 0, c: 1, h: 1, w: 1 })).toBe("none"); // casella libera qualsiasi
@@ -205,7 +213,10 @@ describe("Game", () => {
     const open = new Game({
       rows: 1,
       cols: 3,
-      clues: [{ r: 0, c: 0 }, { r: 0, c: 2, n: 1 }],
+      clues: [
+        { r: 0, c: 0 },
+        { r: 0, c: 2, n: 1 },
+      ],
       solution: [
         { r: 0, c: 0, h: 1, w: 2 },
         { r: 0, c: 2, h: 1, w: 1 },
@@ -279,7 +290,13 @@ describe("Game", () => {
     expect(resumed.hintsUsed).toBe(1);
     expect(resumed.helped).toBe(true);
     expect(resumed.isSolved()).toBe(true);
-    const broken = Game.restore(puzzle, { rects: [{ r: 0, c: 0, h: 1, w: 2 }, { r: 0, c: 1, h: 2, w: 1 }], hintsUsed: 0 });
+    const broken = Game.restore(puzzle, {
+      rects: [
+        { r: 0, c: 0, h: 1, w: 2 },
+        { r: 0, c: 1, h: 2, w: 1 },
+      ],
+      hintsUsed: 0,
+    });
     expect(broken.placed).toEqual([{ r: 0, c: 0, h: 1, w: 2 }]);
     expect(broken.helped).toBe(false);
   });
@@ -326,8 +343,7 @@ describe("Game", () => {
     for (const variant of ["classic", "shapes"] as const) {
       const game = new Game(generate({ rows: 10, cols: 10, seed: 7, variant }));
       // Un minuto tra un clic e l'altro: l'attesa tra due pezzi non scatta mai.
-      let now = 0;
-      for (let hint = game.hint(now); hint; hint = game.hint((now += 60_000))) {
+      for (let now = 0, hint = game.hint(now); hint; now += 60_000, hint = game.hint(now)) {
         expect("wait" in hint, variant).toBe(false);
         expect("placed" in hint && !("removed" in hint) ? hint.reason : true, variant).toBeTruthy();
       }

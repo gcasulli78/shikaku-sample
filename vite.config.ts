@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
-import { defineConfig } from "vitest/config";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { defineConfig } from "vitest/config";
 import pkg from "./package.json";
 
 /** Impronta CSP di uno script (Web Crypto: niente @types/node solo per questo). */
@@ -37,7 +37,10 @@ function contentSecurityPolicy(): Plugin {
           ].join("; ");
           const charset = /<meta charset="UTF-8" \/>/i;
           if (!charset.test(html)) this.error(`${file.fileName}: manca <meta charset>, dove inserire la CSP`);
-          file.source = html.replace(charset, (m) => `${m}\n    <meta http-equiv="Content-Security-Policy" content="${policy}" />`);
+          file.source = html.replace(
+            charset,
+            (m) => `${m}\n    <meta http-equiv="Content-Security-Policy" content="${policy}" />`,
+          );
         }
       },
     },

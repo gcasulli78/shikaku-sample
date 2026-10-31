@@ -1,7 +1,7 @@
 import type { GenerateResult } from "./generator";
 import { grade } from "./grader";
-import { solve, type SolveInput } from "./solver";
-import { DIFFICULTIES, MAX_SIZE, MIN_SIZE, type Clue, type Shape, type Variant } from "./types";
+import { type SolveInput, solve } from "./solver";
+import { type Clue, DIFFICULTIES, MAX_SIZE, MIN_SIZE, type Shape, type Variant } from "./types";
 
 /**
  * Un puzzle nel link: gli indizi stessi, non il seed. Il generatore ha un tempo limite,

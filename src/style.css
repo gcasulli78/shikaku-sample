@@ -71,6 +71,7 @@
 
 /* hidden vince sempre, anche sugli elementi con un display proprio. */
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: deve vincere su ogni display. */
   display: none !important;
 }
 

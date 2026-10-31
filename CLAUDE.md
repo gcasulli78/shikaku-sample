@@ -8,6 +8,8 @@ Gioco Shikaku nel browser, per uso personale e con amici. Testi dell'interfaccia
 npm test            # Vitest (logica)
 npm run test:e2e    # Playwright: interfaccia in Chromium, WebKit e iPhone (fa da sé la build)
 npm run typecheck   # tsc --noEmit
+npm run lint        # Biome: regole e formattazione (anche nella CI)
+npm run format      # Biome: formatta e corregge ciò che può
 npm run build       # dist/index.html, file unico
 npm run dev
 ```
@@ -100,7 +102,7 @@ Se si cambiano regole o profili, **prima misurare** su più seed e dimensioni (7
 
 - Prima di modifiche importanti presentare il piano e aspettare la conferma.
 - Per le domande aperte rispondere a parole, non con menu a scelta multipla.
-- Dopo una modifica: typecheck, test e build. Per l'interfaccia `npm run test:e2e` (`e2e/`, Playwright: Chromium, WebKit, iPhone), che gira anche nella CI prima della pubblicazione; un comportamento nuovo dell'interfaccia va coperto lì. Prima volta su un computer: `npx playwright install chromium webkit`. Un test nuovo va visto fallire almeno una volta (il primo controllo del fallback colori passava anche senza fallback: il CSS compresso scrive `@supports not (color:oklch(0 0 0))` senza spazi).
+- Dopo una modifica: lint, typecheck, test e build. Linter e formattatore sono Biome (`biome.json`), non ESLint + Prettier: typescript-eslint non supporta TypeScript 7 (peer fino a 6.0). Spente due regole del preset: `noNonNullAssertion` (con `noUncheckedIndexedAccess` il `!` su un indice sicuro è voluto) e `noDescendingSpecificity` (ordine del CSS voluto). Per l'interfaccia `npm run test:e2e` (`e2e/`, Playwright: Chromium, WebKit, iPhone), che gira anche nella CI prima della pubblicazione; un comportamento nuovo dell'interfaccia va coperto lì. Prima volta su un computer: `npx playwright install chromium webkit`. Un test nuovo va visto fallire almeno una volta (il primo controllo del fallback colori passava anche senza fallback: il CSS compresso scrive `@supports not (color:oklch(0 0 0))` senza spazi).
 - Colori: `oklch()` con dentro una `var()`, su un browser che non lo conosce, non ricade sulla regola precedente ma diventa trasparente. Per questo `tint()` (`ui.ts`) dà anche `--hh` (la tinta HSL equivalente) e `style.css` ha un blocco `@supports not (color: oklch(0 0 0))`. Una regola nuova con `oklch(var(...))` va aggiunta anche lì.
 - Versione x.y.z in `package.json`, mostrata in fondo alla pagina ("Versione 0.2.0", da `__APP_VERSION__` in `vite.config.ts`): chiesta dall'utente per sapere se il sito è aggiornato. A ogni push su main si alza: patch per correzioni, minor per funzioni nuove. Insieme: la voce in `CHANGELOG.md` (dalla sezione "Non ancora pubblicato", in italiano, per chi gioca, con i link di confronto in fondo) e il tag annotato `vX.Y.Z` sul commit, spinto con `git push --follow-tags`.
 - La CI (`.github/workflows/pages.yml`) controlla ogni branch e ogni pull request (test, test dell'interfaccia, build) e pubblica solo da `main`. Per un lavoro lungo o rischioso: un branch, push, CI verde, poi su `main`.

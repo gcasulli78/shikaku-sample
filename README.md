@@ -11,6 +11,8 @@ npm run dev        # sviluppo con ricarica automatica
 npm test           # test della logica (Vitest)
 npm run test:e2e   # test dell'interfaccia in Chromium, WebKit e iPhone (Playwright)
 npm run typecheck  # controllo tipi
+npm run lint       # regole e formattazione del codice (Biome)
+npm run format     # formatta il codice
 npm run build      # crea dist/index.html, file unico da aprire con doppio clic o condividere
 ```
 

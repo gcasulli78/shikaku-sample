@@ -1,4 +1,4 @@
-import { fits, type Clue, type Rect } from "./types";
+import { type Clue, fits, type Rect } from "./types";
 
 export interface SolveInput {
   rows: number;
@@ -30,7 +30,9 @@ export interface Candidate {
 export function clueIndexMap(input: SolveInput): Int32Array {
   const clueAt = new Int32Array(input.rows * input.cols).fill(-1);
   for (const idx of input.blocked ?? []) clueAt[idx] = BLOCKED;
-  input.clues.forEach((cl, i) => (clueAt[cl.r * input.cols + cl.c] = i));
+  input.clues.forEach((cl, i) => {
+    clueAt[cl.r * input.cols + cl.c] = i;
+  });
   return clueAt;
 }
 

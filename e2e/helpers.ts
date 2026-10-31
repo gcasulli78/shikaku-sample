@@ -44,7 +44,10 @@ export async function puzzle(page: Page): Promise<{ rows: number; cols: number; 
 export async function drag(page: Page, rect: Rect): Promise<void> {
   const { rows, cols } = await puzzle(page);
   const box = (await page.locator("#board").boundingBox())!;
-  const at = (r: number, c: number) => ({ x: box.x + ((c + 0.5) * box.width) / cols, y: box.y + ((r + 0.5) * box.height) / rows });
+  const at = (r: number, c: number) => ({
+    x: box.x + ((c + 0.5) * box.width) / cols,
+    y: box.y + ((r + 0.5) * box.height) / rows,
+  });
   const from = at(rect.r, rect.c);
   const to = at(rect.r + rect.h - 1, rect.c + rect.w - 1);
   await page.mouse.move(from.x, from.y);

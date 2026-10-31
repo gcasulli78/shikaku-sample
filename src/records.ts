@@ -1,4 +1,4 @@
-import { isDifficulty, isVariant, MAX_SIZE, MIN_SIZE, type Difficulty, type Variant } from "./types";
+import { type Difficulty, isDifficulty, isVariant, MAX_SIZE, MIN_SIZE, type Variant } from "./types";
 
 /** Record di una griglia, un livello e una variante. Tempi in ms. */
 export interface RecordEntry {

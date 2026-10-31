@@ -30,7 +30,14 @@ describe("valori salvati in localStorage", () => {
       { ...puzzle, rows: 8.5 },
       { ...puzzle, clues: 5 },
       { ...puzzle, clues: [] },
-      { ...puzzle, clues: [{ r: 0, c: 0, n: 4 }, { r: 0, c: 0, n: 4 }], solution: puzzle.solution.slice(0, 2) },
+      {
+        ...puzzle,
+        clues: [
+          { r: 0, c: 0, n: 4 },
+          { r: 0, c: 0, n: 4 },
+        ],
+        solution: puzzle.solution.slice(0, 2),
+      },
       { ...puzzle, clues: puzzle.clues.map((cl, i) => (i === 0 ? { ...cl, shape: "<b>" } : cl)) },
       { ...puzzle, clues: puzzle.clues.map((cl, i) => (i === 0 ? { ...cl, n: 1000 } : cl)) },
       { ...puzzle, solution: puzzle.solution.slice(1) },
@@ -65,11 +72,21 @@ describe("valori salvati in localStorage", () => {
 
   it("impostazioni: i campi che non tornano prendono il valore predefinito", () => {
     expect(parseSettings(undefined)).toEqual(DEFAULT_SETTINGS);
-    expect(parseSettings({ sizeId: "<b>", custom: { rows: '<img src=x onerror="1">', cols: 40 }, difficulty: "x", variant: 1, theme: "constructor" })).toEqual({
+    expect(
+      parseSettings({
+        sizeId: "<b>",
+        custom: { rows: '<img src=x onerror="1">', cols: 40 },
+        difficulty: "x",
+        variant: 1,
+        theme: "constructor",
+      }),
+    ).toEqual({
       ...DEFAULT_SETTINGS,
       custom: { rows: 4, cols: 15 },
     });
-    expect(parseSettings({ sizeId: "custom", custom: { rows: 9, cols: 12 }, difficulty: "master", variant: "shapes", theme: "dark" })).toEqual({
+    expect(
+      parseSettings({ sizeId: "custom", custom: { rows: 9, cols: 12 }, difficulty: "master", variant: "shapes", theme: "dark" }),
+    ).toEqual({
       sizeId: "custom",
       custom: { rows: 9, cols: 12 },
       difficulty: "master",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveSelection, selectionRect, startSelection, type Selection } from "../src/selection";
+import { moveSelection, type Selection, selectionRect, startSelection } from "../src/selection";
 
 /** La selezione dopo aver passato il dito sulle caselle date, in ordine. */
 function path(start: [number, number], ...cells: [number, number][]): Selection {
@@ -16,7 +16,12 @@ describe("selezione", () => {
     // 2×3 con il 6 in alto al centro: giù a sinistra, poi a destra passando sotto il 6.
     expect(selectionRect(path([0, 1], [1, 1], [1, 0], [1, 1], [1, 2]))).toEqual({ r: 0, c: 0, h: 2, w: 3 });
     // 1×6 con il numero al terzo posto: a sinistra fino in fondo, poi a destra (anche di colpo).
-    expect(selectionRect(path([0, 2], [0, 1], [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5]))).toEqual({ r: 0, c: 0, h: 1, w: 6 });
+    expect(selectionRect(path([0, 2], [0, 1], [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5]))).toEqual({
+      r: 0,
+      c: 0,
+      h: 1,
+      w: 6,
+    });
     expect(selectionRect(path([0, 2], [0, 0], [0, 5]))).toEqual({ r: 0, c: 0, h: 1, w: 6 });
     expect(selectionRect(path([0, 2], [0, 0], [0, 1], [0, 4]))).toEqual({ r: 0, c: 0, h: 1, w: 5 });
   });

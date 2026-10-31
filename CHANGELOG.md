@@ -4,6 +4,14 @@ Le versioni seguono lo schema x.y.z: la **y** sale con una funzione nuova, la **
 
 ## [Non ancora pubblicato]
 
+## [0.4.5] - 2026-10-31
+
+### Aggiunto
+- Regole e formattazione del codice controllate da Biome (`npm run lint`), anche nella CI.
+
+### Cambiato
+- La CI non si avvia più per i tag delle versioni.
+
 ## [0.4.4] - 2026-10-31
 
 ### Aggiunto
@@ -71,7 +79,8 @@ Prima versione, sviluppata dal 27 al 29 ottobre.
 ### Sicurezza
 - Dati salvati nel browser sempre controllati, link aperti nel Worker con un limite di tempo, Content Security Policy.
 
-[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.4...HEAD
+[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.1...v0.4.2

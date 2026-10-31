@@ -1,25 +1,19 @@
-import { formatTime, Game, Timer, type Hint, type Reason, type WrongReason } from "./game";
-import { partition, type GenerateOptions, type GenerateResult } from "./generator";
-import { createRng, randomSeed } from "./rng";
-import { runJob, type Job } from "./jobs";
+import { formatTime, Game, type Hint, type Reason, Timer, type WrongReason } from "./game";
+import { type GenerateOptions, type GenerateResult, partition } from "./generator";
+import { type Job, runJob } from "./jobs";
 import { parseRecordKey, recordKey, recordWin } from "./records";
-import { moveSelection, selectionAt, selectionRect, selectionStart, startSelection, type Selection } from "./selection";
+import { createRng, randomSeed } from "./rng";
+import { moveSelection, type Selection, selectionAt, selectionRect, selectionStart, startSelection } from "./selection";
 import { completePuzzle, encodePuzzle, type LinkedPuzzle } from "./share";
-import {
-  CUSTOM,
-  parseReady,
-  parseRecords,
-  parseSavedState,
-  parseSettings,
-  type SavedState,
-  type Theme,
-} from "./stored";
+import { CUSTOM, parseReady, parseRecords, parseSavedState, parseSettings, type SavedState, type Theme } from "./stored";
 import { TUTORIAL } from "./tutorial";
 import {
   area,
   availableDifficulties,
+  type Clue,
   clampSize,
   DIFFICULTIES,
+  type Difficulty,
   difficultyLabel,
   difficultyLevel,
   HINT_LIMIT,
@@ -28,14 +22,12 @@ import {
   MIN_SIZE,
   minSide,
   PRESETS,
-  sameRect,
-  TIME_LIMITS,
-  VARIANTS,
-  type Clue,
-  type Difficulty,
   type Rect,
   type Shape,
   type Size,
+  sameRect,
+  TIME_LIMITS,
+  VARIANTS,
   type Variant,
 } from "./types";
 import GeneratorWorker from "./worker?worker&inline";
@@ -159,22 +151,45 @@ function explainFrames(reason: Reason, name: Namer): Frame[] {
   const Focus = capitalize(name(focus));
   if (reason.kind === "single") {
     return [
-      { text: `${Focus} può stare in un solo modo: le altre forme toccherebbero altri numeri o pezzi.`, chain: [], marks: [], subject: focus, problems: [] },
+      {
+        text: `${Focus} può stare in un solo modo: le altre forme toccherebbero altri numeri o pezzi.`,
+        chain: [],
+        marks: [],
+        subject: focus,
+        problems: [],
+      },
     ];
   }
   if (reason.only) {
     const many = reason.discards.length > 1 ? "le altre sue forme non ci arrivano" : "l'altra sua forma non ci arriva";
-    return [{ text: `La casella segnata può raggiungerla solo ${name(focus)}, e ${many}.`, chain: [], marks: [reason.only], subject: focus, problems: [] }];
+    return [
+      {
+        text: `La casella segnata può raggiungerla solo ${name(focus)}, e ${many}.`,
+        chain: [],
+        marks: [reason.only],
+        subject: focus,
+        problems: [],
+      },
+    ];
   }
   const total = reason.discards.length;
   const frames: Frame[] = [];
   reason.discards.forEach(({ rect, forced, problem }, k) => {
     const count = total > 1 ? `(${k + 1}/${total}) ` : "";
     const ghost = { rect, clue: focus };
-    frames.push({ text: `${count}Proviamo ${name(focus)} qui, nel tratteggio.`, ghost, chain: [], marks: [], subject: focus, problems: [] });
+    frames.push({
+      text: `${count}Proviamo ${name(focus)} qui, nel tratteggio.`,
+      ghost,
+      chain: [],
+      marks: [],
+      subject: focus,
+      problems: [],
+    });
     forced.forEach((f, n) => {
       const who = otherName(f.clue, focus, name);
-      const text = f.cell ? `Allora la casella segnata può coprirla solo ${who}, e solo così.` : `Allora ${who} ha un posto solo: questo.`;
+      const text = f.cell
+        ? `Allora la casella segnata può coprirla solo ${who}, e solo così.`
+        : `Allora ${who} ha un posto solo: questo.`;
       frames.push({
         text: `${count}${text}`,
         ghost,
@@ -191,7 +206,10 @@ function explainFrames(reason: Reason, name: Namer): Frame[] {
         : "Ma così la casella in rosso non può coprirla più nessuno.";
     frames.push({ text: `${count}${end}`, ghost, chain, marks: [], problems: ["clue" in problem ? problem.clue : problem.cell] });
   });
-  const rest = total === 1 ? `Quindi ${name(focus)} va nell'altro modo.` : `Nessuna di queste ${total} forme va: ${name(focus)} può stare in un modo solo.`;
+  const rest =
+    total === 1
+      ? `Quindi ${name(focus)} va nell'altro modo.`
+      : `Nessuna di queste ${total} forme va: ${name(focus)} può stare in un modo solo.`;
   frames.push({ text: rest, chain: [], marks: [], subject: focus, problems: [] });
   return frames;
 }
@@ -416,7 +434,8 @@ function assignHues(clues: Clue[]): number[] {
     const used = new Map<number, number>();
     for (let j = 0; j < i; j++) {
       const other = clues[j]!;
-      if (Math.max(Math.abs(other.r - clue.r), Math.abs(other.c - clue.c)) <= 3) used.set(hues[j]!, (used.get(hues[j]!) ?? 0) + 1);
+      if (Math.max(Math.abs(other.r - clue.r), Math.abs(other.c - clue.c)) <= 3)
+        used.set(hues[j]!, (used.get(hues[j]!) ?? 0) + 1);
     }
     const candidates = HUES.map((_, k) => HUES[(k + offset + i) % HUES.length]!);
     const free = candidates.find((h) => !used.has(h));
@@ -788,7 +807,9 @@ export function startApp(): void {
     // che insegna proprio con le spiegazioni).
     const tutorial = options.status !== undefined;
     const hintLimit = tutorial || hintsExplained(variant, puzzle.difficulty) ? undefined : HINT_LIMIT;
-    game = saved?.game ? Game.restore(puzzle, saved.game, { hintCooldown, hintLimit }) : new Game(puzzle, { hintCooldown, hintLimit });
+    game = saved?.game
+      ? Game.restore(puzzle, saved.game, { hintCooldown, hintLimit })
+      : new Game(puzzle, { hintCooldown, hintLimit });
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.clues);
@@ -1034,7 +1055,12 @@ export function startApp(): void {
             ? " · con qualche aiuto"
             : " · senza aiuti");
       const { rows, cols } = game.puzzle;
-      const { best, bestClean } = recordWin(records, recordKey({ rows, cols, difficulty, variant: gameVariant }), time, !game.helped);
+      const { best, bestClean } = recordWin(
+        records,
+        recordKey({ rows, cols, difficulty, variant: gameVariant }),
+        time,
+        !game.helped,
+      );
       writeJson(RECORDS_KEY, records);
       winRecord.hidden = !best && !bestClean;
       winRecord.textContent = bestClean && !best ? "Nuovo record senza aiuti!" : "Nuovo record!";
@@ -1133,7 +1159,7 @@ export function startApp(): void {
       const sel = selectionRect(selecting);
       parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
     }
-    srEl.textContent = parts.join(", ") + ".";
+    srEl.textContent = `${parts.join(", ")}.`;
   };
 
   const MOVES: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
@@ -1143,7 +1169,8 @@ export function startApp(): void {
     const move = MOVES[e.key];
     if (move) {
       const { rows, cols } = game.puzzle;
-      if (keyboard) cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
+      if (keyboard)
+        cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
       keyboard = true;
       if (selecting) selecting = moveSelection(selecting, ...cursor);
     } else if (e.key === "Enter" || e.key === " ") {
@@ -1222,7 +1249,11 @@ export function startApp(): void {
     const wrong = game.check();
     clearMessages();
     notice =
-      wrong === 0 ? "Finora è tutto giusto." : wrong === 1 ? "C'è un rettangolo sbagliato." : `Ci sono ${wrong} rettangoli sbagliati.`;
+      wrong === 0
+        ? "Finora è tutto giusto."
+        : wrong === 1
+          ? "C'è un rettangolo sbagliato."
+          : `Ci sono ${wrong} rettangoli sbagliati.`;
     save();
     render();
   });
@@ -1273,7 +1304,12 @@ export function startApp(): void {
       const body = table.createTBody();
       for (const { rows: r, cols: c, difficulty: d, variant: v, rec } of rows) {
         const tr = body.insertRow();
-        for (const text of [`${r}×${c} · ${difficultyLabel(d)}${variantSuffix(v)}`, String(rec.wins), recordTime(rec.best), recordTime(rec.bestClean)]) {
+        for (const text of [
+          `${r}×${c} · ${difficultyLabel(d)}${variantSuffix(v)}`,
+          String(rec.wins),
+          recordTime(rec.best),
+          recordTime(rec.bestClean),
+        ]) {
           tr.insertCell().textContent = text;
         }
       }

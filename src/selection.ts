@@ -1,4 +1,4 @@
-import { rectFromCorners, type Rect } from "./types";
+import { type Rect, rectFromCorners } from "./types";
 
 /**
  * La selezione mentre si trascina (o si muove il cursore da tastiera), un asse alla volta.

@@ -2,14 +2,14 @@ import type { SavedGame } from "./game";
 import type { GenerateResult } from "./generator";
 import { parseRecordKey, type RecordEntry, type Records } from "./records";
 import {
+  type Clue,
   clampSize,
+  type Difficulty,
   isDifficulty,
   isVariant,
   MAX_SIZE,
   MIN_SIZE,
   PRESETS,
-  type Clue,
-  type Difficulty,
   type Rect,
   type Shape,
   type Size,
@@ -110,7 +110,8 @@ export function parsePuzzle(v: unknown): GenerateResult | undefined {
   if (!isObject(v)) return undefined;
   const { rows, cols, seed, unique, difficulty, logical } = v;
   if (!isInt(rows, MIN_SIZE, MAX_SIZE) || !isInt(cols, MIN_SIZE, MAX_SIZE)) return undefined;
-  if (!Number.isFinite(seed) || typeof unique !== "boolean" || !isDifficulty(difficulty) || typeof logical !== "boolean") return undefined;
+  if (!Number.isFinite(seed) || typeof unique !== "boolean" || !isDifficulty(difficulty) || typeof logical !== "boolean")
+    return undefined;
   const clues = parseAll(v.clues, (item) => parseClue(item, rows, cols));
   // La soluzione ha un rettangolo per indizio, nello stesso ordine.
   const solution = parseAll(v.solution, (item) => parseRect(item, rows, cols));

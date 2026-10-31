@@ -1,5 +1,5 @@
-import { conflictOf, nextDeduction, type DeductionKind } from "./grader";
-import { area, contains, fits, overlaps, sameRect, type Clue, type Puzzle, type Rect } from "./types";
+import { conflictOf, type DeductionKind, nextDeduction } from "./grader";
+import { area, type Clue, contains, fits, overlaps, type Puzzle, type Rect, sameRect } from "./types";
 
 /** Un'azione annullabile: rettangoli tolti e aggiunti insieme. */
 interface Action {
@@ -190,7 +190,8 @@ export class Game {
   /** Libero se non sovrappone nessun rettangolo già posato né caselle nere. */
   canPlace(rect: Rect): boolean {
     if (this.rects.some((other) => overlaps(other, rect))) return false;
-    for (let r = rect.r; r < rect.r + rect.h; r++) for (let c = rect.c; c < rect.c + rect.w; c++) if (this.isBlocked(r, c)) return false;
+    for (let r = rect.r; r < rect.r + rect.h; r++)
+      for (let c = rect.c; c < rect.c + rect.w; c++) if (this.isBlocked(r, c)) return false;
     return true;
   }
 
@@ -330,7 +331,8 @@ export class Game {
     const missing = this.puzzle.solution.filter((sol) => !this.rects.some((rect) => sameRect(rect, sol)));
     const near = this.lastMove;
     if (!near) return missing[0];
-    const dist = (rect: Rect) => Math.abs(rect.r + rect.h / 2 - (near.r + near.h / 2)) + Math.abs(rect.c + rect.w / 2 - (near.c + near.w / 2));
+    const dist = (rect: Rect) =>
+      Math.abs(rect.r + rect.h / 2 - (near.r + near.h / 2)) + Math.abs(rect.c + rect.w / 2 - (near.c + near.w / 2));
     return missing.reduce<Rect | undefined>((best, rect) => (!best || dist(rect) < dist(best) ? rect : best), undefined);
   }
 
@@ -342,7 +344,11 @@ export class Game {
     const { clues } = this.puzzle;
     const discards = found.discards.map(({ rect, forced, problem }) => ({
       rect,
-      forced: forced.map((f) => (f.cell === undefined ? { clue: clues[f.clue]!, rect: f.rect } : { clue: clues[f.clue]!, rect: f.rect, cell: this.cellAt(f.cell) })),
+      forced: forced.map((f) =>
+        f.cell === undefined
+          ? { clue: clues[f.clue]!, rect: f.rect }
+          : { clue: clues[f.clue]!, rect: f.rect, cell: this.cellAt(f.cell) },
+      ),
       problem: "cell" in problem ? { cell: this.cellAt(problem.cell) } : { clue: clues[problem.clue]! },
     }));
     const reason: Reason = { kind: found.kind, clue: clues[found.clue]!, discards };

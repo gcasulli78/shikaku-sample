@@ -1,17 +1,17 @@
 import { grade, solvableByDeduction } from "./grader";
-import { createRng, pick, randomSeed, type Rng } from "./rng";
-import { solve, type SolveInput } from "./solver";
+import { createRng, pick, type Rng, randomSeed } from "./rng";
+import { type SolveInput, solve } from "./solver";
 import {
   area,
+  type Clue,
+  DIFFICULTIES,
+  type Difficulty,
   difficultyLevel,
   hintsExplained,
-  sameRect,
-  shapeOf,
-  DIFFICULTIES,
-  type Clue,
-  type Difficulty,
   type Puzzle,
   type Rect,
+  sameRect,
+  shapeOf,
   type Variant,
 } from "./types";
 
@@ -102,18 +102,12 @@ const WIDE_WEIGHT = 2;
  * Taglia la griglia in rettangoli casuali che coprono tutto senza sovrapporsi.
  * `balanced`: tanti orizzontali quanti verticali (vedi layout).
  */
-export function partition(
-  rows: number,
-  cols: number,
-  rng: Rng,
-  profile: Profile = PROFILES.medium,
-  balanced = false,
-): Rect[] {
+export function partition(rows: number, cols: number, rng: Rng, profile: Profile = PROFILES.medium, balanced = false): Rect[] {
   const maxArea = maxAreaFor(rows, cols, profile);
   const used = new Uint8Array(rows * cols);
   const rects: Rect[] = [];
   const shapeWeight = (o: Rect) =>
-    Math.pow(area(o), profile.sizeExp) *
+    area(o) ** profile.sizeExp *
     (1 + (profile.compositeBonus * (divisorCount(area(o)) - 2)) / 2) *
     (balanced && o.w > o.h ? WIDE_WEIGHT : 1);
 
@@ -145,8 +139,7 @@ export function partition(
     const fit = balanced ? new Set(options.map((o) => o.h * 100 + o.w)) : undefined;
     const symmetric = fit ? options.filter((o) => area(o) > 1 && fit.has(o.w * 100 + o.h)) : [];
     const bigger = symmetric.length > 0 ? symmetric : options.filter((o) => area(o) > 1);
-    const rect =
-      bigger.length > 0 && rng() >= SINGLE_CELL_CHANCE ? pickWeighted(rng, bigger, shapeWeight) : pick(rng, options);
+    const rect = bigger.length > 0 && rng() >= SINGLE_CELL_CHANCE ? pickWeighted(rng, bigger, shapeWeight) : pick(rng, options);
     for (let rr = rect.r; rr < rect.r + rect.h; rr++) {
       for (let cc = rect.c; cc < rect.c + rect.w; cc++) used[rr * cols + cc] = 1;
     }
@@ -238,7 +231,7 @@ function pickCell(rect: Rect, rng: Rng, profile: Profile): { r: number; c: numbe
   for (let r = rect.r; r < rect.r + rect.h; r++) for (let c = rect.c; c < rect.c + rect.w; c++) cells.push({ r, c });
   const depth = ({ r, c }: { r: number; c: number }) =>
     Math.min(r - rect.r, rect.r + rect.h - 1 - r) + Math.min(c - rect.c, rect.c + rect.w - 1 - c);
-  return pickWeighted(rng, cells, (cell) => Math.pow(1 + depth(cell), profile.interior));
+  return pickWeighted(rng, cells, (cell) => (1 + depth(cell)) ** profile.interior);
 }
 
 /**

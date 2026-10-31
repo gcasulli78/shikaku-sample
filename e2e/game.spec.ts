@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
+import pkg from "../package.json" with { type: "json" };
 import { generate } from "../src/generator";
 import { encodePuzzle } from "../src/share";
-import pkg from "../package.json" with { type: "json" };
 import { drag, open, puzzle, ready } from "./helpers";
 
 test("si carica una griglia con i numeri colorati e la versione", async ({ page }) => {
@@ -9,7 +9,10 @@ test("si carica una griglia con i numeri colorati e la versione", async ({ page 
   const { clues } = await puzzle(page);
   await expect(page.locator("#board .pill")).toHaveCount(clues.length);
   // Un colore che il browser non capisce lascerebbe la pastiglia trasparente, numero invisibile.
-  const background = await page.locator("#board .pill").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  const background = await page
+    .locator("#board .pill")
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(background).not.toBe("rgba(0, 0, 0, 0)");
   await expect(page.locator("#version")).toHaveText(`Versione ${pkg.version}`);
 });
@@ -105,7 +108,10 @@ test("senza oklch() i colori hanno l'alternativa HSL", async ({ page }) => {
     await route.fulfill({ response, body: html });
   });
   await open(page, { size: "5x5", difficulty: "easy" });
-  const background = await page.locator("#board .pill").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  const background = await page
+    .locator("#board .pill")
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(background).toMatch(/^rgb\(/);
   expect(background).not.toBe("rgba(0, 0, 0, 0)");
 });

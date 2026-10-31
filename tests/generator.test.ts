@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { generate, partition } from "../src/generator";
-import { createRng } from "../src/rng";
 import { grade, solvableByDeduction } from "../src/grader";
+import { createRng } from "../src/rng";
 import { countSolutions } from "../src/solver";
-import { contains, fits, hintsExplained, type Difficulty, type Puzzle, type Rect, type Variant } from "../src/types";
+import { contains, type Difficulty, fits, hintsExplained, type Puzzle, type Rect, type Variant } from "../src/types";
 
 const SIZES: [number, number][] = [
   [4, 4],
@@ -32,7 +32,10 @@ function expectExactCover(rows: number, cols: number, rects: Rect[], blocked: nu
       }
     }
   }
-  expect(seen.every((v) => v === 1), "griglia non coperta del tutto").toBe(true);
+  expect(
+    seen.every((v) => v === 1),
+    "griglia non coperta del tutto",
+  ).toBe(true);
 }
 
 function expectValidPuzzle(p: Puzzle) {
@@ -149,7 +152,11 @@ describe("generate con difficoltà", () => {
   });
 
   it("variante Caselle nere: quota di caselle nere, mai sotto un rettangolo, soluzione unica", () => {
-    for (const [difficulty, black] of [["easy", 8], ["hard", 8], ["expert", 3]] as [Difficulty, number][]) {
+    for (const [difficulty, black] of [
+      ["easy", 8],
+      ["hard", 8],
+      ["expert", 3],
+    ] as [Difficulty, number][]) {
       for (let seed = 1; seed <= 3; seed++) {
         const p = generate({ rows: 10, cols: 10, difficulty, variant: "blocked", seed });
         expectValidPuzzle(p);

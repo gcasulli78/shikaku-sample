@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
-import { grade, nextDeduction, type Deduction, type DeductionKind } from "../src/grader";
+import { type Deduction, type DeductionKind, grade, nextDeduction } from "../src/grader";
 import { candidatesFor, clueIndexMap, type SolveInput } from "../src/solver";
-import { availableDifficulties, contains, sameRect, type Clue, type Difficulty, type Rect, type Variant } from "../src/types";
+import { availableDifficulties, type Clue, contains, type Difficulty, type Rect, sameRect, type Variant } from "../src/types";
 
 /** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
 function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
   const clues: Clue[] = [];
-  lines.forEach((line, r) =>
+  lines.forEach((line, r) => {
     [...line].forEach((ch, c) => {
       if (ch !== ".") clues.push({ r, c, n: parseInt(ch, 36) });
-    }),
-  );
+    });
+  });
   return { rows: lines.length, cols: lines[0]!.length, clues };
 }
 
@@ -37,7 +37,9 @@ describe("grade", () => {
         const p = generate({ rows: 8, cols: 8, difficulty, seed });
         const g = grade(p);
         expect(g.solved, `${difficulty} seed ${seed}`).toBe(true);
-        g.placed.forEach((rect, i) => expect(sameRect(rect!, p.solution[i]!)).toBe(true));
+        g.placed.forEach((rect, i) => {
+          expect(sameRect(rect!, p.solution[i]!)).toBe(true);
+        });
       }
     }
   });
@@ -48,7 +50,9 @@ describe("grade", () => {
         const p = generate({ rows: 8, cols: 8, difficulty, variant: "shapes", seed });
         const g = grade(p);
         expect(g.solved, `${difficulty} seed ${seed}`).toBe(true);
-        g.placed.forEach((rect, i) => expect(sameRect(rect!, p.solution[i]!)).toBe(true));
+        g.placed.forEach((rect, i) => {
+          expect(sameRect(rect!, p.solution[i]!)).toBe(true);
+        });
       }
     }
   });
@@ -58,7 +62,9 @@ describe("grade", () => {
       const p = generate({ rows: 8, cols: 8, difficulty: "master", seed, maxCandidates: 1000 });
       const g = grade(p);
       expect(g.difficulty, `seed ${seed}`).toBe("master");
-      g.placed.forEach((rect, i) => expect(sameRect(rect!, p.solution[i]!)).toBe(true));
+      g.placed.forEach((rect, i) => {
+        expect(sameRect(rect!, p.solution[i]!)).toBe(true);
+      });
       expect(grade(p, 3).solved, `seed ${seed}`).toBe(false);
     }
   }, 120_000);
@@ -87,9 +93,12 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
     return { taken, done, avail, open };
   };
   const base = given.map((rect) => ({ clue: owner(rect), rect }));
-  const visible = view(base).avail(d.clue).map((cand) => cand.rect);
+  const visible = view(base)
+    .avail(d.clue)
+    .map((cand) => cand.rect);
   const shown = [d.rect, ...d.discards.map((dis) => dis.rect)];
-  if (visible.length !== shown.length || !visible.every((rect) => shown.some((other) => sameRect(rect, other)))) return "forme diverse";
+  if (visible.length !== shown.length || !visible.every((rect) => shown.some((other) => sameRect(rect, other))))
+    return "forme diverse";
   if (d.kind === "single") return d.discards.length === 0 ? undefined : "single con forme scartate";
   for (const dis of d.discards) {
     const pieces = [...base, { clue: d.clue, rect: dis.rect }];
@@ -98,7 +107,10 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
       if (now.done.has(f.clue)) return "catena su un indizio già posato";
       // Obbligato: una forma sola, o l'unico ad arrivare alla casella f.cell, in un modo solo.
       const ways = f.cell === undefined ? now.avail(f.clue) : now.avail(f.clue).filter((cand) => cand.cells.includes(f.cell!));
-      if (f.cell !== undefined && (now.taken.has(f.cell) || now.open.some((j) => j !== f.clue && now.avail(j).some((cand) => cand.cells.includes(f.cell!))))) {
+      if (
+        f.cell !== undefined &&
+        (now.taken.has(f.cell) || now.open.some((j) => j !== f.clue && now.avail(j).some((cand) => cand.cells.includes(f.cell!))))
+      ) {
         return "casella della catena non solo sua";
       }
       if (ways.length !== 1 || !sameRect(ways[0]!.rect, f.rect)) return "catena non obbligata";
@@ -118,7 +130,8 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
   }
   if (d.only !== undefined) {
     const now = view(base);
-    if (now.open.some((i) => i !== d.clue && now.avail(i).some((cand) => cand.cells.includes(d.only!)))) return "casella non solo sua";
+    if (now.open.some((i) => i !== d.clue && now.avail(i).some((cand) => cand.cells.includes(d.only!))))
+      return "casella non solo sua";
     if (!cellsOf(d.rect, input.cols).includes(d.only)) return "casella fuori dal pezzo";
   }
   return undefined;
@@ -127,13 +140,23 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
 describe("nextDeduction", () => {
   it("forma unica", () => {
     // Il 2 non può scendere (c'è il 4): ha una sola forma già all'inizio.
-    expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({ clue: 0, rect: { r: 0, c: 0, h: 1, w: 2 }, kind: "single", discards: [] });
+    expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({
+      clue: 0,
+      rect: { r: 0, c: 0, h: 1, w: 2 },
+      kind: "single",
+      discards: [],
+    });
   });
 
   it("riparte dai pezzi già posati", () => {
     const input = parse(["2.", "4.", ".."]);
     expect(nextDeduction(input, [{ r: 0, c: 0, h: 1, w: 2 }])).toMatchObject({ clue: 1, rect: { r: 1, c: 0, h: 2, w: 2 } });
-    expect(nextDeduction(input, [{ r: 0, c: 0, h: 1, w: 2 }, { r: 1, c: 0, h: 2, w: 2 }])).toBeUndefined();
+    expect(
+      nextDeduction(input, [
+        { r: 0, c: 0, h: 1, w: 2 },
+        { r: 1, c: 0, h: 2, w: 2 },
+      ]),
+    ).toBeUndefined();
   });
 
   it("casella che raggiunge un solo indizio: basta mostrare quella", () => {
@@ -231,7 +254,10 @@ describe("nextDeduction", () => {
             given.push(p.solution.find((sol) => !given.some((g) => sameRect(g, sol)))!);
             continue;
           }
-          expect(p.solution.some((sol) => sameRect(sol, d.rect)), label).toBe(true);
+          expect(
+            p.solution.some((sol) => sameRect(sol, d.rect)),
+            label,
+          ).toBe(true);
           expect(explanationHolds(p, given, d), label).toBeUndefined();
           seen.add(d.kind);
           given.push(d.rect);

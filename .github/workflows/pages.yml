@@ -4,6 +4,8 @@ name: GitHub Pages
 
 on:
   push:
+    # Tutti i branch ma non i tag: il tag di una versione indica un commit già controllato.
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -25,6 +27,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Stile e regole del codice (Biome): un errore ferma tutto, come un test.
+      - run: npm run lint
       - run: npm test
       # Test dell'interfaccia in Chromium, WebKit (Safari) e iPhone: si pubblica solo se passano.
       - run: npx playwright install --with-deps chromium webkit

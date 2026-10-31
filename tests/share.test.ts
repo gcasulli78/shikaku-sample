@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generate } from "../src/generator";
-import { recordKey, parseRecordKey, recordWin, type Records } from "../src/records";
+import { parseRecordKey, type Records, recordKey, recordWin } from "../src/records";
 import { decodePuzzle, encodePuzzle, LINK_TIME_MS, puzzleFromCode } from "../src/share";
 
 describe("link condivisibile", () => {

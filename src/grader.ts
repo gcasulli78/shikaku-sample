@@ -1,5 +1,5 @@
-import { candidatesFor, clueIndexMap, type Candidate, type SolveInput } from "./solver";
-import { DIFFICULTIES, sameRect, type Difficulty, type Rect } from "./types";
+import { type Candidate, candidatesFor, clueIndexMap, type SolveInput } from "./solver";
+import { DIFFICULTIES, type Difficulty, type Rect, sameRect } from "./types";
 
 /**
  * Valuta la difficoltà risolvendo come farebbe una persona: regole in ordine di costo,
@@ -227,7 +227,15 @@ function ruleGuess(s: State, total: number, guess: { options: number; level: num
     const kept = s.cands[i]!.filter((cand) => {
       const trial = cloneState(s);
       place(trial, i, cand);
-      return propagate(trial, total, guess.level, DIFFICULTIES.map(() => 0), work) !== "contradiction";
+      return (
+        propagate(
+          trial,
+          total,
+          guess.level,
+          DIFFICULTIES.map(() => 0),
+          work,
+        ) !== "contradiction"
+      );
     });
     if (kept.length < s.cands[i]!.length) {
       s.cands[i] = kept;
@@ -362,7 +370,8 @@ function forcedIn(state: State, s: State, input: SolveInput): Discard["forced"] 
     if (state.occupied[idx] || owners[idx]!.length !== 1) continue;
     const j = owners[idx]![0]!;
     const covering = state.cands[j]!.filter((cand) => cand.cells.includes(idx));
-    if (state.cands[j]!.length > 1 && covering.length === 1 && !seen(j, covering[0]!.rect)) steps.push({ clue: j, rect: covering[0]!.rect, cell: idx });
+    if (state.cands[j]!.length > 1 && covering.length === 1 && !seen(j, covering[0]!.rect))
+      steps.push({ clue: j, rect: covering[0]!.rect, cell: idx });
   }
   return steps;
 }
@@ -443,7 +452,8 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: 
       if (!survivor || discards.length !== list.length - 1) continue;
       const kind: DeductionKind = discards.some((dis) => dis.forced.length > 0) ? "chain" : "direct";
       // A parità di catena meno forme da scartare, poi il più vicino (open è in ordine).
-      if (!best || discards.length < best.cost) best = { found: { clue: i, rect: survivor.rect, kind, discards }, cost: discards.length };
+      if (!best || discards.length < best.cost)
+        best = { found: { clue: i, rect: survivor.rect, kind, discards }, cost: discards.length };
     }
   }
   // Una casella che solo questo numero raggiunge e che nessuna forma scartata copre: è il
