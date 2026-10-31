@@ -404,6 +404,15 @@ describe("Timer", () => {
     expect(timer.elapsed()).toBe(45_000);
   });
 
+  it("l'ora di sistema spostata indietro non fa calare il tempo", () => {
+    let now = 100_000;
+    const timer = new Timer(() => now);
+    timer.reset(30_000);
+    timer.start();
+    now = 40_000;
+    expect(timer.elapsed()).toBe(30_000);
+  });
+
   it("formatta mm:ss", () => {
     expect(formatTime(0)).toBe("0:00");
     expect(formatTime(65_400)).toBe("1:05");

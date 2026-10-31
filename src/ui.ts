@@ -782,7 +782,10 @@ export function startApp(): void {
     hues = assignHues(puzzle.clues);
     solved = false;
     clearMessages();
+    // Il cronometro parte quando la griglia è in gioco (anche ripresa) e si ferma solo alla
+    // vittoria: tempo a pagina aperta, deciso dall'utente. A pagina chiusa conta il salvato.
     timer.reset(saved?.elapsed ?? 0);
+    timer.start();
     legend.hidden = variant !== "shapes";
     board.style.setProperty("--rows", String(rows));
     board.style.setProperty("--cols", String(cols));
@@ -1029,10 +1032,6 @@ export function startApp(): void {
     if (solved) winDialog.showModal();
   };
 
-  const firstInput = () => {
-    if (!solved) timer.start();
-  };
-
   // --- Input: trascinamento con Pointer Events (mouse e touch) ---
   const cellFromPoint = (x: number, y: number): [number, number] => {
     const box = board.getBoundingClientRect();
@@ -1070,12 +1069,11 @@ export function startApp(): void {
   const commitRect = (sel: Selection) => {
     const rect = selectionRect(sel);
     const intent = game.intent(rect);
-    // "blocked" e "none": la griglia non cambia, quindi né cronometro né suggerimento evidenziato.
+    // "blocked" e "none": la griglia non cambia, quindi il suggerimento evidenziato resta.
     if (intent === "remove") game.remove(game.rectAt(...selectionStart(sel))!);
     else if (intent === "place") game.place(rect);
     else return render();
 
-    firstInput();
     clearMessages();
     afterMove();
   };
@@ -1178,7 +1176,6 @@ export function startApp(): void {
     afterMove();
   });
   hintBtn.addEventListener("click", () => {
-    firstInput();
     const hint = game.hint(timer.elapsed());
     if (hint && "wait" in hint) {
       // Troppo presto per un altro pezzo: restano evidenziati indizio e motivo già mostrati.
@@ -1287,13 +1284,10 @@ export function startApp(): void {
     if (winDialog.returnValue === "new") void newGame();
   });
 
-  // Il cronometro si ferma con la scheda nascosta e riparte al ritorno.
-  // Nascondendo la scheda si salva anche il tempo trascorso.
+  // Il cronometro non si ferma con la scheda nascosta (deciso dall'utente): nascondendola si
+  // salva soltanto il tempo trascorso, nel caso il browser chiuda la pagina.
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      timer.pause();
-      if (game) save();
-    } else if (!solved && timer.elapsed() > 0) timer.start();
+    if (document.hidden && game) save();
   });
   addEventListener("pagehide", () => {
     if (game) save();

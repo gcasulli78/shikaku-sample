@@ -384,12 +384,16 @@ export class Game {
   }
 }
 
-/** Cronometro con pausa; l'orologio è iniettabile per i test. */
+/**
+ * Cronometro con pausa; l'orologio è iniettabile per i test. Orologio di sistema e non
+ * performance.now(): quello su alcuni telefoni si ferma con il dispositivo in sospensione,
+ * mentre il tempo a pagina aperta deve contare anche quello (deciso dall'utente).
+ */
 export class Timer {
   private elapsedBefore = 0;
   private startedAt: number | undefined;
 
-  constructor(private readonly now: () => number = () => performance.now()) {}
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   get running(): boolean {
     return this.startedAt !== undefined;
@@ -413,7 +417,8 @@ export class Timer {
 
   /** Millisecondi trascorsi. */
   elapsed(): number {
-    return this.elapsedBefore + (this.startedAt === undefined ? 0 : this.now() - this.startedAt);
+    // Ora del telefono spostata indietro durante la partita: il tempo non cala.
+    return this.elapsedBefore + (this.startedAt === undefined ? 0 : Math.max(0, this.now() - this.startedAt));
   }
 }
 
