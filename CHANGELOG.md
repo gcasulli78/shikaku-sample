@@ -4,6 +4,11 @@ Le versioni seguono lo schema x.y.z: la **y** sale con una funzione nuova, la **
 
 ## [Non ancora pubblicato]
 
+## [0.4.6] - 2026-10-31
+
+### Aggiunto
+- `npm run measure`: le misure di generatore e suggerimenti da cui vengono soglie e tempi, ripetibili.
+
 ## [0.4.5] - 2026-10-31
 
 ### Aggiunto
@@ -79,7 +84,8 @@ Prima versione, sviluppata dal 27 al 29 ottobre.
 ### Sicurezza
 - Dati salvati nel browser sempre controllati, link aperti nel Worker con un limite di tempo, Content Security Policy.
 
-[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.5...HEAD
+[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.2...v0.4.3

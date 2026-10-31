@@ -13,6 +13,7 @@ npm run test:e2e   # test dell'interfaccia in Chromium, WebKit e iPhone (Playwri
 npm run typecheck  # controllo tipi
 npm run lint       # regole e formattazione del codice (Biome)
 npm run format     # formatta il codice
+npm run measure    # misura generatore e suggerimenti su tutte le griglie (qualche minuto)
 npm run build      # crea dist/index.html, file unico da aprire con doppio clic o condividere
 ```
 

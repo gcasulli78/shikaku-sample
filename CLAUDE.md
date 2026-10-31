@@ -10,6 +10,7 @@ npm run test:e2e    # Playwright: interfaccia in Chromium, WebKit e iPhone (fa d
 npm run typecheck   # tsc --noEmit
 npm run lint        # Biome: regole e formattazione (anche nella CI)
 npm run format      # Biome: formatta e corregge ciò che può
+npm run measure     # misure di generatore e suggerimenti (minuti, vedi sotto)
 npm run build       # dist/index.html, file unico
 npm run dev
 ```
@@ -96,7 +97,7 @@ Il livello è la regola più avanzata che serve al valutatore (`src/grader.ts`) 
 - All'avvio: puzzle del link (`#p=…`), altrimenti partita salvata, altrimenti una nuova. Riprendendo una partita i menu restano quelli delle impostazioni; con un link si allineano al puzzle.
 - Il link contiene gli **indizi** (`share.ts`, con numero di versione), non il seed: col tempo limite lo stesso seed può dare puzzle diversi su dispositivi diversi, e cambiare il generatore romperebbe i link. All'apertura soluzione e livello si ricalcolano con solver e valutatore; dopo l'apertura l'indirizzo si ripulisce. Funziona anche con `hashchange` (link incollato nella scheda aperta).
 
-Se si cambiano regole o profili, **prima misurare** su più seed e dimensioni (7×7, 8×8, 10×10, 15×15, una griglia rettangolare): quanti puzzle del livello giusto si trovano entro il tempo limite e quanto tempo serve. Le soglie attuali vengono da queste misure.
+Se si cambiano regole o profili, **prima misurare** su più seed e dimensioni (7×7, 8×8, 10×10, 15×15, una griglia rettangolare): quanti puzzle del livello giusto si trovano entro il tempo limite e quanto tempo serve. Le soglie attuali vengono da queste misure. Il comando è `npm run measure` (`scripts/measure/`, circa 7 minuti): genera 10 puzzle per variante, griglia e livello con le opzioni del gioco, simula su ognuno una partita fatta solo di suggerimenti e stampa il riepilogo; righe in `measurements/` (fuori da git). `SEEDS`, `ONLY=15x15:hard` e `VARIANT` restringono la misura. Gli script usano i tipi di Node (`scripts/tsconfig.json`), il resto del codice no.
 
 ## Modo di lavorare
 
