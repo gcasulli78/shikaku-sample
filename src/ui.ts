@@ -13,14 +13,17 @@ import {
   type ShownHint,
   secondsLeft,
 } from "./hint-text";
+import { setupKeyboard } from "./keyboard";
+import { clueLabel, variantLabel, variantSuffix } from "./labels";
 import { startLoader } from "./loader";
-import { parseRecordKey, recordKey, recordWin } from "./records";
+import { recordKey, recordWin } from "./records";
+import { showRecords } from "./records-dialog";
 import { createRunner } from "./runner";
 import { moveSelection, type Selection, selectionAt, selectionRect, selectionStart, startSelection } from "./selection";
-import { completePuzzle, encodePuzzle, type LinkedPuzzle } from "./share";
+import { encodePuzzle, type LinkedPuzzle } from "./share";
 import { GAME_KEY, READY_KEY, RECORDS_KEY, readStored, removeKey, STORAGE_KEY, writeJson } from "./storage";
 import { CUSTOM, parseReady, parseRecords, parseSavedState, parseSettings, type SavedState, type Theme } from "./stored";
-import { TUTORIAL } from "./tutorial";
+import { setupTutorial } from "./tutorial-panel";
 import {
   area,
   availableDifficulties,
@@ -29,14 +32,12 @@ import {
   DIFFICULTIES,
   type Difficulty,
   difficultyLabel,
-  difficultyLevel,
   HINT_LIMIT,
   hintsExplained,
   MAX_SIZE,
   MIN_SIZE,
   minSide,
   PRESETS,
-  type Shape,
   type Size,
   sameRect,
   TIME_LIMITS,
@@ -57,28 +58,6 @@ interface Choice {
   size: Size;
   difficulty: Difficulty;
   variant: Variant;
-}
-
-function variantLabel(v: Variant): string {
-  return VARIANTS.find((x) => x.id === v)!.label;
-}
-
-/** " · Forme" dopo livello o griglia; niente per il Classico. */
-function variantSuffix(v: Variant): string {
-  return v !== "classic" ? ` · ${variantLabel(v)}` : "";
-}
-
-const SHAPE_LABELS: Record<Shape, string> = {
-  square: "quadrato",
-  oblong: "rettangolo non quadrato",
-  wide: "rettangolo orizzontale",
-  tall: "rettangolo verticale",
-};
-
-/** Descrizione dell'indizio per i lettori di schermo. */
-function clueLabel(clue: Clue): string {
-  const shape = clue.shape ? SHAPE_LABELS[clue.shape] : "forma libera";
-  return `${shape}, ${clue.n !== undefined ? `${clue.n} caselle` : "caselle libere"}`;
 }
 
 /** Ogni quanti ms la spiegazione passa al passo successivo (o con un tocco sulla frase). */
@@ -189,8 +168,6 @@ export function startApp(): void {
     notice = undefined;
   };
   const records = readStored(RECORDS_KEY, parseRecords);
-  /** Il passo del tutorial in corso: la partita vera resta salvata e si riprende all'uscita. */
-  let tutorialStep: number | undefined;
   let request = 0;
 
   // --- Tema ---
@@ -317,7 +294,7 @@ export function startApp(): void {
   };
 
   const newGame = async () => {
-    leaveTutorial();
+    tutorial.leave();
     const size = chosenSize();
     syncDifficulties();
     const chosen = difficultySelect.value as Difficulty;
@@ -408,7 +385,7 @@ export function startApp(): void {
 
   /** Salva la partita in corso; una partita vinta non si riprende. */
   const save = () => {
-    if (tutorialStep !== undefined) return;
+    if (tutorial.active()) return;
     if (solved) return removeKey(GAME_KEY);
     const state: SavedState = {
       puzzle: game.puzzle as GenerateResult,
@@ -551,7 +528,7 @@ export function startApp(): void {
       board.append(el);
     });
     board.classList.toggle("solved", solved);
-    renderCursor();
+    keys.render();
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
@@ -612,10 +589,8 @@ export function startApp(): void {
       solved = true;
       timer.pause();
     }
-    if (solved && tutorialStep !== undefined) {
-      const last = tutorialStep === TUTORIAL.length - 1;
-      tutorialDone.textContent = last ? "Risolto! Hai visto tutte le regole: buon divertimento." : "Risolto! Passa al prossimo.";
-      tutorialDone.hidden = false;
+    if (solved && tutorial.active()) {
+      tutorial.solved();
       return render();
     }
     if (solved) {
@@ -655,11 +630,7 @@ export function startApp(): void {
   let drag: { pointerId: number; sel: Selection } | undefined;
 
   board.addEventListener("pointerdown", (e) => {
-    if (keyboard) {
-      keyboard = false;
-      selecting = undefined;
-      renderCursor();
-    }
+    keys.release();
     if (solved || drag || e.button !== 0) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
     drag = { pointerId: e.pointerId, sel: startSelection(...cell) };
@@ -699,79 +670,21 @@ export function startApp(): void {
   board.addEventListener("pointerup", (e) => endDrag(e, true));
   board.addEventListener("pointercancel", (e) => endDrag(e, false));
 
-  // --- Tastiera: un cursore sulla griglia; Invio inizia la selezione e poi la posa ---
-  /** Il cursore si vede solo usando la tastiera, finché non si torna al mouse. */
-  let keyboard = false;
-  let cursor: [number, number] = [0, 0];
-  /** La selezione da tastiera, dalla casella dove si è premuto Invio. */
-  let selecting: Selection | undefined;
-  let cursorEl: HTMLDivElement | undefined;
-
-  const renderCursor = () => {
-    cursorEl?.remove();
-    cursorEl = undefined;
-    if (!keyboard || !game || solved) return;
-    const { rows, cols } = game.puzzle;
-    cursor = [Math.min(cursor[0], rows - 1), Math.min(cursor[1], cols - 1)];
-    cursorEl = document.createElement("div");
-    cursorEl.className = "cursor";
-    cellArea(cursorEl, ...cursor);
-    board.append(cursorEl);
-    if (selecting) showPreview(selecting);
-  };
-
-  /** Cosa c'è sotto il cursore, per i lettori di schermo. */
-  const describeCursor = () => {
-    const [r, c] = cursor;
-    const clue = game.puzzle.clues.find((cl) => cl.r === r && cl.c === c);
-    const rect = game.rectAt(r, c);
-    const parts = [`Riga ${r + 1}, colonna ${c + 1}`];
-    if (clue) parts.push(`indizio: ${clueLabel(clue)}`);
-    parts.push(game.isBlocked(r, c) ? "casella nera" : rect ? `nel rettangolo ${rect.h}×${rect.w}` : "libera");
-    if (selecting) {
-      const sel = selectionRect(selecting);
-      parts.push(`selezione ${sel.h}×${sel.w}, Invio per posarla`);
-    }
-    srEl.textContent = `${parts.join(", ")}.`;
-  };
-
-  const MOVES: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
-
-  board.addEventListener("keydown", (e) => {
-    if (!game || solved || e.ctrlKey || e.metaKey || e.altKey) return;
-    const move = MOVES[e.key];
-    if (move) {
-      const { rows, cols } = game.puzzle;
-      if (keyboard)
-        cursor = [Math.min(rows - 1, Math.max(0, cursor[0] + move[0])), Math.min(cols - 1, Math.max(0, cursor[1] + move[1]))];
-      keyboard = true;
-      if (selecting) selecting = moveSelection(selecting, ...cursor);
-    } else if (e.key === "Enter" || e.key === " ") {
-      keyboard = true;
-      if (selecting) {
-        const sel = selecting;
-        selecting = undefined;
-        commitRect(sel);
-      } else selecting = startSelection(...cursor);
-    } else if (e.key === "Escape" && selecting) {
-      selecting = undefined;
-      render();
-    } else if ((e.key === "Delete" || e.key === "Backspace") && keyboard) {
-      const rect = game.rectAt(...cursor);
-      if (rect) {
-        game.remove(rect);
-        clearMessages();
-        afterMove();
-      }
-    } else return;
-    e.preventDefault();
-    if (!selecting) clearPreview();
-    renderCursor();
-    describeCursor();
-  });
-  board.addEventListener("blur", () => {
-    selecting = undefined;
-    clearPreview();
+  // --- Tastiera: un cursore sulla griglia (keyboard.ts) ---
+  const keys = setupKeyboard({
+    board,
+    sr: srEl,
+    game: () => game,
+    solved: () => solved,
+    commit: commitRect,
+    remove: (rect) => {
+      game.remove(rect);
+      clearMessages();
+      afterMove();
+    },
+    render: () => render(),
+    showPreview: (sel) => showPreview(sel),
+    clearPreview: () => clearPreview(),
   });
 
   // --- Azioni ---
@@ -854,42 +767,8 @@ export function startApp(): void {
     render();
   });
 
-  // --- Record ---
-  const recordTime = (ms: number | undefined) => (ms === undefined ? "—" : formatTime(ms));
-  recordsBtn.addEventListener("click", () => {
-    const rows = Object.entries(records)
-      .flatMap(([key, rec]) => {
-        const parsed = parseRecordKey(key);
-        return parsed ? [{ ...parsed, rec }] : [];
-      })
-      .sort(
-        (a, b) =>
-          a.variant.localeCompare(b.variant) ||
-          a.rows * a.cols - b.rows * b.cols ||
-          a.rows - b.rows ||
-          difficultyLevel(a.difficulty) - difficultyLevel(b.difficulty),
-      );
-    if (rows.length === 0) {
-      recordsBody.textContent = "Ancora nessuna partita vinta.";
-    } else {
-      const table = document.createElement("table");
-      table.innerHTML = "<thead><tr><th>Partita</th><th>Vinte</th><th>Migliore</th><th>Senza aiuti</th></tr></thead>";
-      const body = table.createTBody();
-      for (const { rows: r, cols: c, difficulty: d, variant: v, rec } of rows) {
-        const tr = body.insertRow();
-        for (const text of [
-          `${r}×${c} · ${difficultyLabel(d)}${variantSuffix(v)}`,
-          String(rec.wins),
-          recordTime(rec.best),
-          recordTime(rec.bestClean),
-        ]) {
-          tr.insertCell().textContent = text;
-        }
-      }
-      recordsBody.replaceChildren(table);
-    }
-    recordsDialog.showModal();
-  });
+  // --- Record (records-dialog.ts) ---
+  recordsBtn.addEventListener("click", () => showRecords(records, recordsBody, recordsDialog));
   document.addEventListener("keydown", (e) => {
     if (!game || solved || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -914,48 +793,25 @@ export function startApp(): void {
     if (game) save();
   });
 
-  // --- Tutorial: griglie scritte a mano, giocate sulla griglia vera ---
-  const showTutorial = (index: number) => {
-    const step = TUTORIAL[index]!;
-    tutorialStep = index;
-    const { rows, cols, clues, blocked } = step;
-    startGame(completePuzzle({ rows, cols, clues, blocked })!, step.variant, {
-      status: `Come si gioca · ${index + 1} di ${TUTORIAL.length}`,
-      // Nel tutorial si impara: nessuna attesa tra un pezzo suggerito e l'altro.
-      hintCooldown: 0,
-    });
-    tutorialStepEl.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
-    tutorialTitle.textContent = step.title;
-    tutorialText.textContent = step.text;
-    tutorialDone.hidden = true;
-    tutorialPrev.disabled = index === 0;
-    tutorialNext.textContent = index === TUTORIAL.length - 1 ? "Gioca" : "Avanti";
-    tutorialPanel.hidden = false;
-  };
-
-  /** Chiude il pannello del tutorial (senza toccare la partita in gioco). */
-  function leaveTutorial() {
-    tutorialStep = undefined;
-    tutorialPanel.hidden = true;
-  }
-
-  /** Esce dal tutorial e torna alla partita salvata, o a una nuova. */
-  const exitTutorial = () => {
-    leaveTutorial();
-    if (!resume()) void newGame();
-  };
-
-  tutorialBtn.addEventListener("click", () => {
-    // La partita vera si salva col tempo trascorso fin qui, per riprenderla all'uscita.
-    if (game && tutorialStep === undefined) save();
-    showTutorial(0);
+  // --- Tutorial: griglie scritte a mano, giocate sulla griglia vera (tutorial-panel.ts) ---
+  const tutorial = setupTutorial({
+    button: tutorialBtn,
+    panel: tutorialPanel,
+    stepLabel: tutorialStepEl,
+    title: tutorialTitle,
+    text: tutorialText,
+    done: tutorialDone,
+    prev: tutorialPrev,
+    next: tutorialNext,
+    exit: tutorialExit,
+    start: (puzzle, variant, options) => startGame(puzzle, variant, options),
+    saveGame: () => {
+      if (game) save();
+    },
+    resumeOrNew: () => {
+      if (!resume()) void newGame();
+    },
   });
-  tutorialPrev.addEventListener("click", () => showTutorial(tutorialStep! - 1));
-  tutorialNext.addEventListener("click", () => {
-    if (tutorialStep! < TUTORIAL.length - 1) showTutorial(tutorialStep! + 1);
-    else exitTutorial();
-  });
-  tutorialExit.addEventListener("click", exitTutorial);
 
   /** Riprende la partita salvata; false se non ce n'è una. */
   function resume(): boolean {
@@ -1011,7 +867,7 @@ export function startApp(): void {
     const linked = await linkAsync({ link: code });
     if (id !== linkRequest || gameId !== request) return "stale";
     if (linked) {
-      leaveTutorial();
+      tutorial.leave();
       syncControls(linked.puzzle, linked.variant);
       startGame(linked.puzzle, linked.variant, { note: " · da un link" });
       return "ok";

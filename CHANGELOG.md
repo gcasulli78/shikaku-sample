@@ -4,6 +4,11 @@ Le versioni seguono lo schema x.y.z: la **y** sale con una funzione nuova, la **
 
 ## [Non ancora pubblicato]
 
+## [0.4.9] - 2026-10-31
+
+### Cambiato
+- Tastiera, tutorial e record hanno ora il loro modulo, con nuovi test dell'interfaccia per la tastiera e la tabella dei record. Il gioco non cambia.
+
 ## [0.4.8] - 2026-10-31
 
 ### Aggiunto
@@ -97,7 +102,8 @@ Prima versione, sviluppata dal 27 al 29 ottobre.
 ### Sicurezza
 - Dati salvati nel browser sempre controllati, link aperti nel Worker con un limite di tempo, Content Security Policy.
 
-[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.8...HEAD
+[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.9...HEAD
+[0.4.9]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.5...v0.4.6

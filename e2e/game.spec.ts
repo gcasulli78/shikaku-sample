@@ -25,6 +25,46 @@ test("risolvendo il puzzle trascinando i rettangoli si vince", async ({ page }) 
   await expect(page.locator("#win-text")).toContainText("senza aiuti");
 });
 
+test("dopo una vittoria il record compare nella tabella", async ({ page }) => {
+  await open(page, { size: "5x5", difficulty: "easy" });
+  const { solution } = await puzzle(page);
+  for (const rect of solution) await drag(page, rect);
+  await page.locator("#win").getByRole("button", { name: "Chiudi" }).click();
+  await page.locator("#records-btn").click();
+  const row = page.locator("#records-body tbody tr");
+  await expect(row).toHaveCount(1);
+  await expect(row.locator("td").first()).toHaveText("5×5 · Facile");
+  await expect(row.locator("td").nth(1)).toHaveText("1");
+});
+
+test("da tastiera si posa e si toglie un rettangolo", async ({ page, isMobile }) => {
+  test.skip(isMobile, "sul telefono non c'è la tastiera fisica");
+  await open(page, { size: "8x8", difficulty: "easy" });
+  const { solution } = await puzzle(page);
+  const rect = solution.find((r) => r.h * r.w > 1)!;
+  const board = page.locator("#board");
+  await board.focus();
+  // Il primo tasto mostra il cursore sulla prima casella senza spostarlo.
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator("#board .cursor")).toHaveCount(1);
+  const go = async (r: number, c: number, from: [number, number]) => {
+    for (let k = from[0]; k < r; k++) await page.keyboard.press("ArrowDown");
+    for (let k = from[1]; k < c; k++) await page.keyboard.press("ArrowRight");
+  };
+  await go(rect.r, rect.c, [0, 0]);
+  await page.keyboard.press("Enter");
+  await go(rect.r + rect.h - 1, rect.c + rect.w - 1, [rect.r, rect.c]);
+  await expect(page.locator("#sr")).toContainText(`selezione ${rect.h}×${rect.w}`);
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#board .rect.valid")).toHaveCount(1);
+  await page.keyboard.press("Delete");
+  await expect(page.locator("#board .rect")).toHaveCount(0);
+  // Con il mouse il cursore sparisce.
+  await page.mouse.move(10, 10);
+  await drag(page, { r: 0, c: 0, h: 1, w: 1 });
+  await expect(page.locator("#board .cursor")).toHaveCount(0);
+});
+
 test("un rettangolo con due numeri è sbagliato e un tocco lo toglie", async ({ page }) => {
   await open(page, { size: "5x5", difficulty: "easy" });
   await drag(page, { r: 0, c: 0, h: 5, w: 5 });
