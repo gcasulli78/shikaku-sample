@@ -134,6 +134,7 @@ function parseSavedGame(v: unknown, rows: number, cols: number): SavedGame | und
   const game: SavedGame = { rects, hintsUsed: v.hintsUsed };
   if (typeof v.helped === "boolean") game.helped = v.helped;
   if (isTime(v.lastPlacedAt)) game.lastPlacedAt = v.lastPlacedAt;
+  if (isInt(v.checksUsed, 0, Number.MAX_SAFE_INTEGER)) game.checksUsed = v.checksUsed;
   return game;
 }
 

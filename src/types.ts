@@ -124,14 +124,32 @@ export function difficultyLabel(d: Difficulty): string {
  * suggerimenti (solvableByDeduction). Misurato il 2026-10-31 (10 puzzle per griglia): passa
  * l'83% o più dei Classico e Caselle nere fino a Esperto e il 72% delle Forme a Difficile,
  * ma solo il 23–60% a Maestro e il 21% delle Forme a Esperto (0% sul 15×15). Lì, deciso
- * dall'utente, il suggerimento non spiega e si usa al massimo HINT_LIMIT volte.
+ * dall'utente, il suggerimento non spiega (posa subito un pezzo o toglie gli errori).
  */
 export function hintsExplained(variant: Variant, difficulty: Difficulty): boolean {
   return difficulty !== "master" && !(variant === "shapes" && difficulty === "expert");
 }
 
-/** Suggerimenti per partita dove non spiegano (vedi hintsExplained), deciso dall'utente. */
-export const HINT_LIMIT = 2;
+/**
+ * Suggerimenti per partita, per livello (decisi dall'utente, uguali per ogni griglia e
+ * variante): si contano i pezzi posati e gli errori tolti, non i gradi. undefined: senza limite.
+ */
+export const HINT_LIMITS: Record<Difficulty, number | undefined> = {
+  easy: undefined,
+  medium: 5,
+  hard: 4,
+  expert: 3,
+  master: 2,
+};
+
+/** Verifiche per partita, per livello (decise dall'utente). undefined: senza limite. */
+export const CHECK_LIMITS: Record<Difficulty, number | undefined> = {
+  easy: undefined,
+  medium: 5,
+  hard: 3,
+  expert: 2,
+  master: 1,
+};
 
 export function clampSize(n: number): number {
   if (!Number.isFinite(n)) return MIN_SIZE;

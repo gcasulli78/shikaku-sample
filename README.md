@@ -50,8 +50,17 @@ Il pulsante **?** apre un tutorial di sette griglie piccole, una per regola: le 
 ## Aiuti
 
 - **Suggerimento**: se ci sono rettangoli sbagliati li toglie e spiega perché (per esempio "l'8 verde vuole 8 caselle, qui ce ne sono 6" o "così il 4 blu non avrebbe più spazio"). Altrimenti aiuta a gradi: prima l'indizio da guardare, poi il ragionamento, poi posa il pezzo. Il ragionamento si vede sulla griglia **a passi**, una cosa per volta (ogni 3,5 secondi, o toccando la frase): "Proviamo il 6 rosso qui, nel tratteggio" → "Allora il 12 viola ha un posto solo: questo" → "Ma così l'8 verde non ha più spazio" → "Quindi il 6 rosso va nell'altro modo". I numeri si chiamano con il colore della loro pastiglia. Il pezzo è sempre uno a cui si arriva ragionando dai pezzi già posati, e fino a Esperto (nelle Forme fino a Difficile) ogni puzzle si risolve fino in fondo così. Tra un pezzo suggerito e il successivo devono passare 15 secondi (il pulsante mostra il conto alla rovescia); indizio e ragionamento restano sempre disponibili.
-- **Suggerimento a Maestro e nelle Forme a Esperto**: lì il ragionamento sarebbe troppo lungo da mostrare, quindi il suggerimento si usa al massimo 2 volte a partita, senza spiegazioni: toglie i rettangoli sbagliati oppure posa un pezzo.
+- **Suggerimento a Maestro e nelle Forme a Esperto**: lì il ragionamento sarebbe troppo lungo da mostrare, quindi il suggerimento è senza spiegazioni: toglie i rettangoli sbagliati oppure posa un pezzo.
 - **Verifica**: dice solo se ci sono errori e quanti, senza indicarli.
+- **Quanti aiuti**: a Facile suggerimenti e verifiche sono illimitati, poi calano col livello, uguali per ogni griglia e variante. I pulsanti mostrano quanti ne restano. Indizio e ragionamento non contano: conta il pezzo posato, o i rettangoli sbagliati tolti.
+
+  | Livello | Suggerimenti | Verifiche |
+  | --- | --- | --- |
+  | Facile | illimitati | illimitate |
+  | Medio | 5 | 5 |
+  | Difficile | 4 | 3 |
+  | Esperto | 3 | 2 |
+  | Maestro | 2 | 1 |
 
 ## Tastiera
 

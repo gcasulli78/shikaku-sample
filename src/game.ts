@@ -51,7 +51,7 @@ export type WrongReason =
  * senza motivo viene dalla soluzione: quando le regole del valutatore non bastano, o (fix)
  * al posto di un rettangolo sbagliato di quell'indizio. wait: il pezzo non si posa ancora,
  * mancano tanti ms (HINT_COOLDOWN dall'ultimo pezzo suggerito). quiet: suggerimento
- * limitato (hintLimit), senza gradi né spiegazioni: toglie gli errori o posa un pezzo; left,
+ * senza gradi né spiegazioni (opzione quiet): toglie gli errori o posa un pezzo; left,
  * quanti ne restano.
  */
 export type Hint =
@@ -78,11 +78,18 @@ export interface SavedGame {
   lastPlacedAt?: number;
   /** Usato un aiuto qualsiasi (anche solo un grado del suggerimento o la verifica). */
   helped?: boolean;
+  /** Verifiche usate (assente nelle partite salvate prima dei limiti: 0). */
+  checksUsed?: number;
 }
 
 export interface GameOptions {
   hintCooldown?: number;
+  /** Suggerimenti per partita (HINT_LIMITS); assente: senza limite. */
   hintLimit?: number;
+  /** Suggerimento senza gradi né spiegazioni (Maestro e Forme Esperto); va con hintLimit. */
+  quiet?: boolean;
+  /** Verifiche per partita (CHECK_LIMITS); assente: senza limite. */
+  checkLimit?: number;
 }
 
 export class Game {
@@ -91,6 +98,8 @@ export class Game {
   private history: Action[] = [];
   /** Pezzi posati o errori tolti dal suggerimento. */
   hintsUsed = 0;
+  /** Volte che si è usata la verifica. */
+  checksUsed = 0;
   /** Usato un aiuto qualsiasi: vale per il record "senza aiuti". */
   helped = false;
   /** Il suggerimento in corso e il grado già mostrato; una mossa lo azzera. */
@@ -102,10 +111,14 @@ export class Game {
   /** Attesa tra due pezzi suggeriti, in ms: 0 nel tutorial. */
   readonly hintCooldown: number;
   /**
-   * Suggerimenti per partita, se limitati (Maestro e Forme Esperto, vedi hintsExplained):
-   * allora niente gradi, spiegazioni né attesa. undefined: senza limite.
+   * Suggerimenti per partita, se limitati (HINT_LIMITS, per livello): si contano i pezzi
+   * posati e gli errori tolti, non i gradi. undefined: senza limite.
    */
   readonly hintLimit: number | undefined;
+  /** Suggerimento senza gradi, spiegazioni né attesa (Maestro e Forme Esperto). */
+  readonly quiet: boolean;
+  /** Verifiche per partita, se limitate (CHECK_LIMITS). undefined: senza limite. */
+  readonly checkLimit: number | undefined;
   /** Caselle nere, una per cella (r * cols + c). */
   private readonly black: Uint8Array;
 
@@ -113,6 +126,8 @@ export class Game {
     this.puzzle = puzzle;
     this.hintCooldown = options.hintCooldown ?? HINT_COOLDOWN;
     this.hintLimit = options.hintLimit;
+    this.quiet = options.quiet ?? false;
+    this.checkLimit = options.checkLimit;
     this.black = new Uint8Array(puzzle.rows * puzzle.cols);
     for (const idx of puzzle.blocked ?? []) this.black[idx] = 1;
   }
@@ -124,6 +139,7 @@ export class Game {
       hintsUsed: this.hintsUsed,
       helped: this.helped,
       lastPlacedAt: this.lastPlacedAt,
+      checksUsed: this.checksUsed,
     };
   }
 
@@ -134,6 +150,7 @@ export class Game {
     game.hintsUsed = saved.hintsUsed;
     game.helped = saved.helped ?? saved.hintsUsed > 0;
     game.lastPlacedAt = saved.lastPlacedAt;
+    game.checksUsed = saved.checksUsed ?? 0;
     return game;
   }
 
@@ -224,10 +241,20 @@ export class Game {
     return this.rects.filter((rect) => !this.puzzle.solution.some((sol) => sameRect(rect, sol)));
   }
 
-  /** Quanti dei rettangoli posati sono sbagliati, senza dire quali (pulsante Verifica). */
-  check(): number {
+  /**
+   * Quanti dei rettangoli posati sono sbagliati, senza dire quali (pulsante Verifica).
+   * undefined se le verifiche sono finite.
+   */
+  check(): number | undefined {
+    if (this.checksLeft === 0) return undefined;
+    this.checksUsed++;
     this.helped = true;
     return this.wrong().length;
+  }
+
+  /** Verifiche rimaste, se limitate (undefined: senza limite). */
+  get checksLeft(): number | undefined {
+    return this.checkLimit === undefined ? undefined : Math.max(0, this.checkLimit - this.checksUsed);
   }
 
   /**
@@ -249,10 +276,13 @@ export class Game {
    * Prima toglie tutti i rettangoli sbagliati, spiegando il primo. Se non ce ne sono,
    * il prossimo pezzo a cui si arriva ragionando dai pezzi posati (nextDeduction), a
    * gradi: indizio, motivo, pezzo. Se le regole non bastano posa subito un pezzo
-   * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto.
+   * mancante della soluzione (che a quel punto è sempre libero). undefined se è già risolto
+   * o i suggerimenti sono finiti. Con un limite, togliere gli errori e posare il pezzo giusto
+   * nello stesso clic conta una volta sola.
    */
   hint(now: number): Hint | undefined {
-    if (this.hintLimit !== undefined) return this.quietHint();
+    if (this.quiet) return this.quietHint();
+    if (this.hintsLeft === 0) return undefined;
     const wrong = this.wrong();
     if (wrong.length > 0) {
       const why = this.whyWrong(wrong[0]!);
@@ -267,7 +297,7 @@ export class Game {
         this.pending = { rect, fix: why.clue, stage: 2 };
         return removed;
       }
-      this.placeHinted(rect, undefined, now);
+      this.placeHinted(rect, undefined, now, false);
       return { ...removed, placed: rect };
     }
     const missing = this.nearestMissing();
@@ -294,7 +324,7 @@ export class Game {
   }
 
   /**
-   * Suggerimento limitato (deciso dall'utente per Maestro e Forme Esperto): un uso toglie
+   * Suggerimento senza spiegazioni (deciso dall'utente per Maestro e Forme Esperto): un uso toglie
    * tutti i rettangoli sbagliati, oppure, se non ce ne sono, posa un pezzo; nessuna
    * spiegazione. Il pezzo è quello dedotto se c'è (vicino a dove si sta ragionando),
    * altrimenti il mancante più vicino all'ultima mossa. undefined se finiti o già risolto.
@@ -317,10 +347,10 @@ export class Game {
   }
 
   /** Posa il pezzo suggerito, se dall'ultimo sono passati HINT_COOLDOWN ms di gioco. */
-  private placeHinted(rect: Rect, reason: Reason | undefined, now: number): Hint {
+  private placeHinted(rect: Rect, reason: Reason | undefined, now: number, count = true): Hint {
     const wait = this.cooldown(now);
     if (wait > 0) return { wait };
-    this.hintsUsed++;
+    if (count) this.hintsUsed++;
     this.lastPlacedAt = now;
     this.place(rect);
     return reason ? { placed: rect, reason } : { placed: rect };

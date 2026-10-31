@@ -27,12 +27,13 @@ import { setupTutorial } from "./tutorial-panel";
 import {
   area,
   availableDifficulties,
+  CHECK_LIMITS,
   type Clue,
   clampSize,
   DIFFICULTIES,
   type Difficulty,
   difficultyLabel,
-  HINT_LIMIT,
+  HINT_LIMITS,
   hintsExplained,
   MAX_SIZE,
   MIN_SIZE,
@@ -353,13 +354,19 @@ export function startApp(): void {
     stopLoader = undefined;
     board.classList.remove("busy");
     const { rows, cols } = puzzle;
-    // Maestro e Forme Esperto: suggerimenti limitati e senza spiegazione (non nel tutorial,
-    // che insegna proprio con le spiegazioni).
+    // Suggerimenti e verifiche limitati per livello; a Maestro e Forme Esperto il suggerimento
+    // non spiega. Nel tutorial niente limiti: insegna proprio con le spiegazioni.
     const tutorial = options.status !== undefined;
-    const hintLimit = tutorial || hintsExplained(variant, puzzle.difficulty) ? undefined : HINT_LIMIT;
+    const limits = tutorial
+      ? {}
+      : {
+          hintLimit: HINT_LIMITS[puzzle.difficulty],
+          checkLimit: CHECK_LIMITS[puzzle.difficulty],
+          quiet: !hintsExplained(variant, puzzle.difficulty),
+        };
     game = saved?.game
-      ? Game.restore(puzzle, saved.game, { hintCooldown, hintLimit })
-      : new Game(puzzle, { hintCooldown, hintLimit });
+      ? Game.restore(puzzle, saved.game, { hintCooldown, ...limits })
+      : new Game(puzzle, { hintCooldown, ...limits });
     gameVariant = variant;
     difficulty = puzzle.difficulty;
     hues = assignHues(puzzle.clues);
@@ -532,7 +539,10 @@ export function startApp(): void {
 
     undoBtn.disabled = !game.canUndo || solved;
     clearBtn.disabled = game.placed.length === 0 || solved;
-    checkBtn.disabled = solved || game.placed.length === 0;
+    const checksLeft = game.checksLeft;
+    checkBtn.textContent =
+      checksLeft === undefined ? "Verifica" : checksLeft === 0 ? "Verifiche finite" : `Verifica (${checksLeft})`;
+    checkBtn.disabled = solved || game.placed.length === 0 || checksLeft === 0;
     shareBtn.disabled = false;
     renderTimer();
   };
@@ -540,14 +550,14 @@ export function startApp(): void {
   /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
   const syncHintButton = () => {
     const left = game.hintsLeft;
-    if (left !== undefined) {
-      // Suggerimento limitato: niente gradi, solo quanti ne restano.
-      const label = left === 0 ? "Suggerimenti finiti" : `Suggerimento (${left})`;
+    if (left === 0 || (left !== undefined && (game.quiet || game.hintStage === 0))) {
+      // Limitato: all'inizio di un suggerimento (o sempre, se non spiega) quanti ne restano.
+      const label = left === 0 ? "Suggerimenti finiti" : `${HINT_LABELS[0]} (${left})`;
       hintBtn.disabled = solved || left === 0;
       if (hintBtn.textContent !== label) hintBtn.textContent = label;
       return;
     }
-    const wait = game.hintStage === 2 ? game.cooldown(timer.elapsed()) : 0;
+    const wait = game.hintStage === 2 && !game.quiet ? game.cooldown(timer.elapsed()) : 0;
     const label = wait > 0 ? `${HINT_LABELS[2]} (${secondsLeft(wait)})` : HINT_LABELS[game.hintStage]!;
     hintBtn.disabled = solved || wait > 0;
     // Chiamata dal cronometro 4 volte al secondo: si scrive solo se cambia.
@@ -733,6 +743,7 @@ export function startApp(): void {
   });
   checkBtn.addEventListener("click", () => {
     const wrong = game.check();
+    if (wrong === undefined) return;
     clearMessages();
     notice =
       wrong === 0

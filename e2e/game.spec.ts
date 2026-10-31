@@ -73,9 +73,10 @@ test("un rettangolo con due numeri è sbagliato e un tocco lo toglie", async ({ 
   await expect(page.locator("#board .rect")).toHaveCount(0);
 });
 
-test("il suggerimento aiuta a gradi: indizio, motivo, pezzo", async ({ page }) => {
+test("il suggerimento aiuta a gradi: indizio, motivo, pezzo; a Medio se ne usano 5", async ({ page }) => {
   await open(page, { size: "8x8", difficulty: "medium" });
   const hint = page.locator("#hint");
+  await expect(hint).toHaveText("Suggerimento (5)");
   await hint.click();
   await expect(page.locator("#status")).toContainText("Guarda");
   await expect(hint).toHaveText("Perché?");
@@ -83,6 +84,8 @@ test("il suggerimento aiuta a gradi: indizio, motivo, pezzo", async ({ page }) =
   await expect(hint).toHaveText("Mostra il pezzo");
   await hint.click();
   await expect(page.locator("#board .rect.hinted")).toHaveCount(1);
+  // I gradi non contano, il pezzo posato sì.
+  await expect(hint).toHaveText("Suggerimento (4)");
 });
 
 test("a Maestro il suggerimento si usa due volte, senza spiegazioni", async ({ page }) => {
@@ -99,6 +102,13 @@ test("a Maestro il suggerimento si usa due volte, senza spiegazioni", async ({ p
   await hint.click();
   await expect(hint).toHaveText("Suggerimenti finiti");
   await expect(hint).toBeDisabled();
+  // A Maestro una verifica sola.
+  const check = page.locator("#check");
+  await expect(check).toHaveText("Verifica (1)");
+  await check.click();
+  await expect(page.locator("#status")).toHaveText("Finora è tutto giusto.");
+  await expect(check).toHaveText("Verifiche finite");
+  await expect(check).toBeDisabled();
 });
 
 test("il cronometro parte al caricamento, senza mosse", async ({ page }) => {

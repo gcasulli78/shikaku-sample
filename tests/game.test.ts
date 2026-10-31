@@ -188,6 +188,13 @@ describe("Game", () => {
       expect(game.placed).toEqual([four]);
     });
 
+    it("con un limite, togliere l'errore e posare il pezzo giusto conta una volta", () => {
+      const game = new Game(misplaced, { hintLimit: 2 });
+      game.place(column);
+      expect(game.hint(0)).toHaveProperty("placed", four);
+      expect(game.hintsLeft).toBe(1);
+    });
+
     it("durante l'attesa lo posa al suggerimento dopo", () => {
       const game = new Game(misplaced);
       game.hint(0);
@@ -371,7 +378,7 @@ describe("Game", () => {
 
   describe("suggerimento limitato (Maestro, Forme Esperto)", () => {
     it("senza gradi né attesa: toglie gli errori o posa un pezzo, al massimo hintLimit volte", () => {
-      const game = new Game(puzzle, { hintLimit: 2 });
+      const game = new Game(puzzle, { hintLimit: 2, quiet: true });
       expect(game.hintsLeft).toBe(2);
       game.place({ r: 0, c: 1, h: 1, w: 2 }); // sbagliato
       expect(game.hint(0)).toEqual({ quiet: true, removed: [{ r: 0, c: 1, h: 1, w: 2 }], left: 1 });
@@ -387,13 +394,43 @@ describe("Game", () => {
     });
 
     it("il conto sopravvive al salvataggio", () => {
-      const game = new Game(puzzle, { hintLimit: 2 });
+      const game = new Game(puzzle, { hintLimit: 2, quiet: true });
       game.hint(0);
-      expect(Game.restore(puzzle, game.snapshot(), { hintLimit: 2 }).hintsLeft).toBe(1);
+      expect(Game.restore(puzzle, game.snapshot(), { hintLimit: 2, quiet: true }).hintsLeft).toBe(1);
     });
 
     it("senza limite il suggerimento resta a gradi", () => {
       expect(new Game(puzzle).hintsLeft).toBeUndefined();
+    });
+  });
+
+  describe("limiti per livello", () => {
+    it("con le spiegazioni i gradi non contano: si conta il pezzo posato", () => {
+      const game = new Game(puzzle, { hintLimit: 1, hintCooldown: 0 });
+      expect(game.hint(0)).toHaveProperty("focus");
+      expect(game.hintsLeft).toBe(1);
+      expect(game.hint(0)).toHaveProperty("explain");
+      expect(game.hint(0)).toHaveProperty("placed");
+      expect(game.hintsLeft).toBe(0);
+      expect(game.hint(0)).toBeUndefined();
+      expect(game.placed).toHaveLength(1);
+    });
+
+    it("la verifica si esaurisce e il conto sopravvive al salvataggio", () => {
+      const game = new Game(puzzle, { checkLimit: 2 });
+      expect(game.checksLeft).toBe(2);
+      expect(game.check()).toBe(0);
+      const restored = Game.restore(puzzle, game.snapshot(), { checkLimit: 2 });
+      expect(restored.checksLeft).toBe(1);
+      expect(restored.check()).toBe(0);
+      expect(restored.checksLeft).toBe(0);
+      expect(restored.check()).toBeUndefined();
+      expect(new Game(puzzle).checksLeft).toBeUndefined();
+    });
+
+    it("una partita salvata prima dei limiti parte da zero verifiche", () => {
+      const game = Game.restore(puzzle, { rects: [], hintsUsed: 0 }, { checkLimit: 1 });
+      expect(game.checksLeft).toBe(1);
     });
   });
 });

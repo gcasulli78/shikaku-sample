@@ -4,6 +4,12 @@ Le versioni seguono lo schema x.y.z: la **y** sale con una funzione nuova, la **
 
 ## [Non ancora pubblicato]
 
+## [0.5.0] - 2026-10-31
+
+### Cambiato
+- Suggerimenti e verifiche sono limitati in base al livello: illimitati a Facile, poi 5 e 5 a Medio, 4 e 3 a Difficile, 3 e 2 a Esperto, 2 e 1 a Maestro. I pulsanti mostrano quanti ne restano. Per il suggerimento contano i pezzi posati e gli errori tolti, non l'indizio e il ragionamento.
+- Le Forme a Esperto hanno ora 3 suggerimenti (prima 2), sempre senza spiegazioni.
+
 ## [0.4.9] - 2026-10-31
 
 ### Cambiato
@@ -102,7 +108,8 @@ Prima versione, sviluppata dal 27 al 29 ottobre.
 ### Sicurezza
 - Dati salvati nel browser sempre controllati, link aperti nel Worker con un limite di tempo, Content Security Policy.
 
-[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.9...HEAD
+[Non ancora pubblicato]: https://github.com/gcasulli78/shikaku-sample/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.9...v0.5.0
 [0.4.9]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/gcasulli78/shikaku-sample/compare/v0.4.6...v0.4.7

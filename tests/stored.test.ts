@@ -12,7 +12,7 @@ describe("valori salvati in localStorage", () => {
   const state = {
     puzzle,
     variant: "classic",
-    game: { rects: puzzle.solution.slice(0, 2), hintsUsed: 1, helped: true, lastPlacedAt: 5000 },
+    game: { rects: puzzle.solution.slice(0, 2), hintsUsed: 1, helped: true, lastPlacedAt: 5000, checksUsed: 2 },
     elapsed: 12_000,
     note: " · da un link",
   };
@@ -59,6 +59,13 @@ describe("valori salvati in localStorage", () => {
       { ...state, puzzle: undefined },
     ]) {
       expect(parseSavedState(roundTrip(v))).toBeUndefined();
+    }
+  });
+
+  it("verifiche usate non valide si ignorano: la partita riparte da zero verifiche", () => {
+    for (const checksUsed of [-1, 1.5, "3", null]) {
+      const saved = parseSavedState(roundTrip({ ...state, game: { ...state.game, checksUsed } }))!;
+      expect(saved.game).not.toHaveProperty("checksUsed");
     }
   });
 
