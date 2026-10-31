@@ -1,10 +1,24 @@
-import { formatTime, Game, type Hint, type Reason, Timer, type WrongReason } from "./game";
-import { type GenerateOptions, type GenerateResult, partition } from "./generator";
-import { type Job, runJob } from "./jobs";
+import { cellArea, gridArea, gridCell } from "./board";
+import { assignHues, tint } from "./colors";
+import { formatTime, Game, Timer } from "./game";
+import type { GenerateOptions, GenerateResult } from "./generator";
+import {
+  clueName,
+  explainFrames,
+  HINT_LABELS,
+  HUE_NAMES,
+  hintSpots,
+  hintText,
+  type Namer,
+  type ShownHint,
+  secondsLeft,
+} from "./hint-text";
+import { startLoader } from "./loader";
 import { parseRecordKey, recordKey, recordWin } from "./records";
-import { createRng, randomSeed } from "./rng";
+import { createRunner } from "./runner";
 import { moveSelection, type Selection, selectionAt, selectionRect, selectionStart, startSelection } from "./selection";
 import { completePuzzle, encodePuzzle, type LinkedPuzzle } from "./share";
+import { GAME_KEY, READY_KEY, RECORDS_KEY, readStored, removeKey, STORAGE_KEY, writeJson } from "./storage";
 import { CUSTOM, parseReady, parseRecords, parseSavedState, parseSettings, type SavedState, type Theme } from "./stored";
 import { TUTORIAL } from "./tutorial";
 import {
@@ -22,7 +36,6 @@ import {
   MIN_SIZE,
   minSide,
   PRESETS,
-  type Rect,
   type Shape,
   type Size,
   sameRect,
@@ -30,12 +43,7 @@ import {
   VARIANTS,
   type Variant,
 } from "./types";
-import GeneratorWorker from "./worker?worker&inline";
 
-const STORAGE_KEY = "shikaku:settings";
-const READY_KEY = "shikaku:ready";
-const GAME_KEY = "shikaku:game";
-const RECORDS_KEY = "shikaku:records";
 /** Il puzzle nel link: indirizzo#p=codice (vedi share.ts). */
 const LINK_PREFIX = "#p=";
 
@@ -73,315 +81,8 @@ function clueLabel(clue: Clue): string {
   return `${shape}, ${clue.n !== undefined ? `${clue.n} caselle` : "caselle libere"}`;
 }
 
-/**
- * Nome a parole della tinta di una pastiglia (vedi HUES): nei suggerimenti "il 6 verde"
- * distingue due 6 meglio di "l'altro 6" (segnalato dall'utente: non si capiva quale).
- */
-const HUE_NAMES: Record<number, string> = {
-  25: "rosso",
-  55: "arancione",
-  95: "giallo",
-  150: "verde",
-  195: "verde acqua",
-  250: "blu",
-  285: "indaco",
-  320: "viola",
-};
-
-type Prep = "" | "di" | "a";
-
-/** Come si chiama un indizio nelle frasi: con articolo e, se la pastiglia è colorata, il colore. */
-type Namer = (clue: Clue, prep?: Prep) => string;
-
-/**
- * L'indizio con l'articolo, semplice o con di/a: "il 6 verde", "dell'8", "all'indizio blu".
- * Si apostrofano i numeri che si leggono con una vocale (uno, otto, undici, ottanta…).
- * Niente nome della forma ("il 2 non quadrato" suonava strano): il colore basta.
- */
-function clueName(clue: Clue, prep: Prep = "", color?: string): string {
-  const { n } = clue;
-  const noun = n !== undefined ? String(n) : clue.shape ? "indizio" : "?";
-  const vowel = n === undefined ? noun === "indizio" : n === 1 || n === 8 || n === 11 || (n >= 80 && n <= 89);
-  const article = vowel ? { "": "l'", di: "dell'", a: "all'" }[prep] : { "": "il ", di: "del ", a: "al " }[prep];
-  return `${article}${noun}${color ? ` ${color}` : ""}`;
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** Riepilogo del motivo quando il pezzo è posato. */
-function reasonText(reason: Reason | undefined, name: Namer): string {
-  if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
-  if (reason.kind === "single") return `${capitalize(name(reason.clue))} può stare solo così.`;
-  if (reason.only) return `Solo ${name(reason.clue)} arriva alla casella segnata: ecco come.`;
-  return `Le altre forme ${name(reason.clue, "di")} creavano un problema: resta questa.`;
-}
-
-/**
- * Un passo della spiegazione: la frase e cosa si vede. ghost: la forma che si prova
- * (tratteggiata nella tinta del suo indizio); chain: i pezzi che diventerebbero obbligati,
- * ognuno nella tinta del suo indizio; marks: le caselle segnate di cui parla la frase;
- * subject: l'indizio di cui parla, cerchiato; problems: il problema, l'unica cosa in rosso.
- */
-interface Frame {
-  text: string;
-  ghost?: { rect: Rect; clue: Clue };
-  chain: { rect: Rect; clue: Clue }[];
-  marks: { r: number; c: number }[];
-  subject?: Clue;
-  problems: { r: number; c: number }[];
-}
-
-/** Un altro indizio nella spiegazione: "l'altro 4 verde" se si chiama come quello che si guarda. */
-function otherName(clue: Clue, focus: Clue, name: Namer): string {
-  const own = name(clue);
-  return clue !== focus && own === name(focus) ? `l'altro ${own.replace(/^(il |l')/, "")}` : own;
-}
-
-/**
- * La spiegazione a passi, una cosa per volta (segnalato dall'utente: tutto in una frase con
- * tutto disegnato insieme non si seguiva). Per ogni forma scartata: si prova la forma ("Proviamo
- * il 2 verde qui, nel tratteggio"), poi un passo per ogni pezzo che diventa obbligato, poi il
- * problema. Le figure si accumulano: nel passo del problema si vede tutta la catena. Alla
- * fine la conclusione. Si guarda un indizio solo e tutto si verifica sulla griglia.
- */
-function explainFrames(reason: Reason, name: Namer): Frame[] {
-  const focus = reason.clue;
-  const Focus = capitalize(name(focus));
-  if (reason.kind === "single") {
-    return [
-      {
-        text: `${Focus} può stare in un solo modo: le altre forme toccherebbero altri numeri o pezzi.`,
-        chain: [],
-        marks: [],
-        subject: focus,
-        problems: [],
-      },
-    ];
-  }
-  if (reason.only) {
-    const many = reason.discards.length > 1 ? "le altre sue forme non ci arrivano" : "l'altra sua forma non ci arriva";
-    return [
-      {
-        text: `La casella segnata può raggiungerla solo ${name(focus)}, e ${many}.`,
-        chain: [],
-        marks: [reason.only],
-        subject: focus,
-        problems: [],
-      },
-    ];
-  }
-  const total = reason.discards.length;
-  const frames: Frame[] = [];
-  reason.discards.forEach(({ rect, forced, problem }, k) => {
-    const count = total > 1 ? `(${k + 1}/${total}) ` : "";
-    const ghost = { rect, clue: focus };
-    frames.push({
-      text: `${count}Proviamo ${name(focus)} qui, nel tratteggio.`,
-      ghost,
-      chain: [],
-      marks: [],
-      subject: focus,
-      problems: [],
-    });
-    forced.forEach((f, n) => {
-      const who = otherName(f.clue, focus, name);
-      const text = f.cell
-        ? `Allora la casella segnata può coprirla solo ${who}, e solo così.`
-        : `Allora ${who} ha un posto solo: questo.`;
-      frames.push({
-        text: `${count}${text}`,
-        ghost,
-        chain: forced.slice(0, n + 1).map((g) => ({ rect: g.rect, clue: g.clue })),
-        marks: f.cell ? [f.cell] : [],
-        subject: f.clue,
-        problems: [],
-      });
-    });
-    const chain = forced.map((g) => ({ rect: g.rect, clue: g.clue }));
-    const end =
-      "clue" in problem
-        ? `Ma così ${otherName(problem.clue, focus, name)} non ha più spazio.`
-        : "Ma così la casella in rosso non può coprirla più nessuno.";
-    frames.push({ text: `${count}${end}`, ghost, chain, marks: [], problems: ["clue" in problem ? problem.clue : problem.cell] });
-  });
-  const rest =
-    total === 1
-      ? `Quindi ${name(focus)} va nell'altro modo.`
-      : `Nessuna di queste ${total} forme va: ${name(focus)} può stare in un modo solo.`;
-  frames.push({ text: rest, chain: [], marks: [], subject: focus, problems: [] });
-  return frames;
-}
-
 /** Ogni quanti ms la spiegazione passa al passo successivo (o con un tocco sulla frase). */
 const FRAME_MS = 3500;
-
-/** Cosa chiede la forma di un indizio, per spiegare un rettangolo della forma sbagliata. */
-const SHAPE_NEEDS: Record<Shape, string> = {
-  square: "un quadrato",
-  oblong: "un rettangolo non quadrato",
-  wide: "un rettangolo più largo che alto",
-  tall: "un rettangolo più alto che largo",
-};
-
-/** Perché il rettangolo (evidenziato) è sbagliato, a parole (misplaced: vedi hintText). */
-function wrongText(why: Exclude<WrongReason, { kind: "misplaced" }>, rect: Rect, name: Namer): string {
-  switch (why.kind) {
-    case "empty":
-      return "non contiene nessun indizio";
-    case "many":
-      return `contiene ${why.count} indizi`;
-    case "area":
-      return `${name(why.clue)} vuole ${why.clue.n} caselle, qui ce ne sono ${area(rect)}`;
-    case "shape":
-      return `${name(why.clue)} vuole ${SHAPE_NEEDS[why.clue.shape!]}`;
-    case "starved":
-      return `così ${name(why.clue)} non avrebbe più spazio`;
-    case "uncovered":
-      return "così la casella evidenziata non la potrebbe coprire nessun indizio";
-  }
-}
-
-/** "12 s": quanto manca, arrotondato per eccesso. */
-function secondsLeft(ms: number): string {
-  return `${Math.ceil(ms / 1000)} s`;
-}
-
-/** Un suggerimento mostrato (l'attesa non si mostra come suggerimento, ma come avviso). */
-type ShownHint = Exclude<Hint, { wait: number }>;
-
-/** "Ne resta 1." / "Suggerimenti finiti." dopo un suggerimento limitato. */
-function leftText(left: number): string {
-  return left === 0 ? "Suggerimenti finiti." : left === 1 ? "Ne resta 1." : `Ne restano ${left}.`;
-}
-
-function hintText(hint: ShownHint, frame: number, name: Namer): string {
-  if ("quiet" in hint) {
-    const n = hint.removed.length;
-    const what = hint.placed ? "Ecco un pezzo." : n === 1 ? "Tolto un rettangolo sbagliato." : `Tolti ${n} rettangoli sbagliati.`;
-    return `${what} ${leftText(hint.left)}`;
-  }
-  if ("removed" in hint) {
-    if (hint.wrong.why.kind === "misplaced") {
-      // Il motivo non si vede dalla griglia: niente frase, il pezzo giusto.
-      const of = name(hint.wrong.why.clue, "di");
-      const where = hint.placed ? "ecco dove va" : "dove va te lo mostro al prossimo suggerimento";
-      return hint.removed.length === 1
-        ? `Tolto un rettangolo sbagliato ${of}: ${where}.`
-        : `Tolti ${hint.removed.length} rettangoli sbagliati. Quello evidenziato era ${of}: ${where}.`;
-    }
-    const why = wrongText(hint.wrong.why, hint.wrong.rect, name);
-    return hint.removed.length === 1
-      ? `Tolto un rettangolo sbagliato: ${why}.`
-      : `Tolti ${hint.removed.length} rettangoli sbagliati. Quello evidenziato: ${why}.`;
-  }
-  if ("focus" in hint) return `Guarda ${name(hint.focus.clue)}: si può già capire dove va.`;
-  if ("explain" in hint) {
-    const frames = explainFrames(hint.explain, name);
-    return frames[frame % frames.length]!.text;
-  }
-  if (hint.fix) return `Ecco dove va ${name(hint.fix)}.`;
-  return reasonText(hint.reason, name);
-}
-
-/** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva (la spiegazione ha le sue). */
-function hintSpots(hint: ShownHint): { r: number; c: number }[] {
-  if ("quiet" in hint) return [];
-  if ("removed" in hint) {
-    const { why } = hint.wrong;
-    return why.kind === "starved" ? [why.clue] : why.kind === "uncovered" ? [why.cell] : [];
-  }
-  if ("focus" in hint) return [hint.focus.clue];
-  if ("explain" in hint) return [];
-  if (!hint.reason) return [];
-  return hint.reason.only ? [hint.reason.only, hint.reason.clue] : [hint.reason.clue];
-}
-
-const HINT_LABELS = ["Suggerimento", "Perché?", "Mostra il pezzo"];
-
-/**
- * Lavora nel Worker (genera un puzzle o apre un link); se non si può creare (browser
- * vecchi), nel thread principale. Una nuova richiesta annulla quella in corso: il Worker
- * viene ricreato e la vecchia promessa si risolve con undefined. R è il risultato dei
- * lavori che si chiedono a questa istanza.
- */
-function createRunner<R>(): (job: Job) => Promise<R | undefined> {
-  let worker: Worker | undefined;
-  let usable = true;
-  let current: { id: number; job: Job; resolve: (r: R | undefined) => void } | undefined;
-  let nextId = 0;
-
-  const fallback = (task: NonNullable<typeof current>) => {
-    // Lascia al browser il tempo di mostrare "Generazione…" prima di bloccarsi.
-    setTimeout(() => task.resolve(current === task ? (runJob(task.job) as R | undefined) : undefined), 30);
-  };
-
-  const spawn = () => {
-    try {
-      worker = new GeneratorWorker();
-    } catch {
-      usable = false;
-      worker = undefined;
-      return;
-    }
-    worker.addEventListener("message", (e: MessageEvent<{ id: number; result: R | undefined }>) => {
-      if (current && e.data.id === current.id) {
-        const task = current;
-        current = undefined;
-        task.resolve(e.data.result);
-      }
-    });
-    worker.addEventListener("error", () => {
-      usable = false;
-      worker?.terminate();
-      worker = undefined;
-      if (current) fallback(current);
-    });
-  };
-
-  return (job) =>
-    new Promise((resolve) => {
-      if (current) {
-        current.resolve(undefined);
-        current = undefined;
-        worker?.terminate();
-        worker = undefined;
-      }
-      const task = { id: ++nextId, job, resolve };
-      current = task;
-      if (usable && !worker) spawn();
-      if (worker) worker.postMessage({ id: task.id, job });
-      else fallback(task);
-    });
-}
-
-/** Valore salvato in localStorage, controllato da parse (vedi stored.ts); undefined se manca. */
-function readStored<T>(key: string, parse: (raw: unknown) => T): T {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(localStorage.getItem(key) ?? "null") ?? undefined;
-  } catch {
-    // Storage non disponibile o JSON rovinato: come se non ci fosse niente.
-  }
-  return parse(raw);
-}
-
-function removeKey(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Come sotto: senza storage non c'è niente da togliere.
-  }
-}
-
-function writeJson(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Storage non disponibile (navigazione privata, file://): si perde solo ciò che si voleva ricordare.
-  }
-}
 
 /**
  * La riga di stato: il livello in evidenza (se c'è) e il testo. Si scrive con nodi DOM,
@@ -406,134 +107,6 @@ const THEME_ICONS: Record<Theme, string> = {
 };
 const THEME_LABELS: Record<Theme, string> = { auto: "Tema: automatico", light: "Tema: chiaro", dark: "Tema: scuro" };
 const NEXT_THEME: Record<Theme, Theme> = { auto: "light", light: "dark", dark: "auto" };
-
-/** Tinte OKLCH ben distinte tra loro, alla stessa luminosità (vedi --pill-l in style.css). */
-const HUES = [250, 150, 55, 320, 25, 195, 95, 285];
-
-/**
- * La stessa tinta in HSL, per i browser senza oklch() (Safari prima di 15.4, Firefox prima
- * di 113): calcolata convertendo il colore della pastiglia. Vedi @supports in style.css.
- */
-const HSL_HUES: Record<number, number> = { 250: 207, 150: 146, 55: 28, 320: 289, 25: 2, 195: 181, 95: 47, 285: 246 };
-
-/** Dà a un elemento la tinta di un indizio: --h per oklch(), --hh per l'alternativa HSL. */
-function tint(el: HTMLElement, hue: number): void {
-  el.style.setProperty("--h", String(hue));
-  el.style.setProperty("--hh", String(HSL_HUES[hue] ?? hue));
-}
-
-/**
- * Una tinta per indizio, diversa da quelle degli indizi vicini (entro tre caselle), così
- * due pastiglie uguali non stanno accanto. Dipende solo dalla posizione degli indizi, non
- * dalla soluzione: i colori non devono suggerire niente.
- */
-function assignHues(clues: Clue[]): number[] {
-  const hues: number[] = [];
-  const offset = Math.floor(Math.random() * HUES.length);
-  clues.forEach((clue, i) => {
-    const used = new Map<number, number>();
-    for (let j = 0; j < i; j++) {
-      const other = clues[j]!;
-      if (Math.max(Math.abs(other.r - clue.r), Math.abs(other.c - clue.c)) <= 3)
-        used.set(hues[j]!, (used.get(hues[j]!) ?? 0) + 1);
-    }
-    const candidates = HUES.map((_, k) => HUES[(k + offset + i) % HUES.length]!);
-    const free = candidates.find((h) => !used.has(h));
-    // Con tutti i colori già usati vicino si prende il meno usato.
-    hues.push(free ?? candidates.reduce((best, h) => ((used.get(h) ?? 0) < (used.get(best) ?? 0) ? h : best)));
-  });
-  return hues;
-}
-
-/** Una casella della griglia (le linee tratteggiate), senza il bordo esterno. */
-function gridCell(r: number, c: number, rows: number, cols: number): HTMLDivElement {
-  const cell = document.createElement("div");
-  cell.className = "cell";
-  if (c === cols - 1) cell.classList.add("last-col");
-  if (r === rows - 1) cell.classList.add("last-row");
-  cell.style.gridArea = `${r + 1} / ${c + 1}`;
-  return cell;
-}
-
-/** Dopo quanti ms d'attesa parte l'animazione: prima niente, per non lampeggiare con i puzzle pronti. */
-const LOADER_DELAY = 250;
-/** Quanto dura il riempimento di una griglia nell'animazione, in ms. */
-const LOADER_FILL_MS = 1600;
-
-/**
- * L'attesa di un puzzle (scelta dall'utente tra tre proposte): la griglia vuota della nuova
- * misura si ritaglia da sola, un rettangolo colorato alla volta in ordine sparso, come se
- * qualcuno la risolvesse; piena, svanisce e ricomincia con un altro taglio. I tagli sono
- * casuali (partition, come fa il generatore), non c'entrano con la soluzione. Con "riduci
- * movimento" solo la griglia vuota che pulsa piano (style.css). Restituisce lo stop.
- */
-function startLoader(board: HTMLElement, rows: number, cols: number): () => void {
-  let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const rng = createRng(randomSeed());
-  const later = (fn: () => void, ms: number) => {
-    timer = setTimeout(() => {
-      if (!stopped) fn();
-    }, ms);
-  };
-  const round = () => {
-    const rects = partition(rows, cols, rng, undefined, true);
-    // Ordine sparso (Fisher–Yates): sembra qualcuno che ragiona, non una stampante.
-    for (let i = rects.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [rects[i], rects[j]] = [rects[j]!, rects[i]!];
-    }
-    const step = Math.min(180, Math.max(40, LOADER_FILL_MS / rects.length));
-    const offset = Math.floor(rng() * HUES.length);
-    const pieces: HTMLElement[] = [];
-    const add = (k: number) => {
-      if (k === rects.length) {
-        later(() => {
-          for (const el of pieces) el.classList.add("out");
-          later(() => {
-            for (const el of pieces) el.remove();
-            round();
-          }, 350);
-        }, 500);
-        return;
-      }
-      const el = document.createElement("div");
-      el.className = "rect valid loader-piece";
-      // Tinte a passo 3 sulle 8: due pezzi di fila non hanno mai lo stesso colore.
-      tint(el, HUES[(offset + k * 3) % HUES.length]!);
-      gridArea(el, rects[k]!);
-      board.append(el);
-      pieces.push(el);
-      later(() => add(k + 1), step);
-    };
-    add(0);
-  };
-  later(() => {
-    board.classList.remove("busy");
-    board.classList.add("loading");
-    board.style.setProperty("--rows", String(rows));
-    board.style.setProperty("--cols", String(cols));
-    const cells: HTMLElement[] = [];
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push(gridCell(r, c, rows, cols));
-    board.replaceChildren(...cells);
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) round();
-  }, LOADER_DELAY);
-  board.ariaBusy = "true";
-  return () => {
-    stopped = true;
-    clearTimeout(timer);
-    board.classList.remove("loading");
-    board.ariaBusy = null;
-  };
-}
-
-function gridArea(el: HTMLElement, rect: Rect): void {
-  el.style.gridArea = `${rect.r + 1} / ${rect.c + 1} / span ${rect.h} / span ${rect.w}`;
-}
-
-function cellArea(el: HTMLElement, r: number, c: number): void {
-  gridArea(el, { r, c, h: 1, w: 1 });
-}
 
 export function startApp(): void {
   const settings = readStored(STORAGE_KEY, parseSettings);

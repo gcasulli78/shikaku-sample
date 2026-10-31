@@ -19,7 +19,8 @@ Su Windows, se `npm` non si trova: `$env:PATH = "C:\Program Files\nodejs;$env:PA
 
 ## Vincoli di architettura
 
-- La logica (`types`, `rng`, `solver`, `grader`, `generator`, `game`) non usa il DOM ed è coperta dai test in `tests/`. `ui.ts` si occupa solo di rendering e input.
+- La logica (`types`, `rng`, `solver`, `grader`, `generator`, `game`) non usa il DOM ed è coperta dai test in `tests/`. Anche le parole del suggerimento (`hint-text.ts`: nomi degli indizi, frasi, passi delle spiegazioni) sono senza DOM e testate (`tests/hint-text.test.ts`, che controlla anche le parole vietate dall'utente): una frase nuova va lì, non in `ui.ts`.
+- Interfaccia divisa (2026-10-31, da 1.460 righe in un file): `ui.ts` (disegno, input, azioni, avvio), `loader.ts` (animazione d'attesa), `colors.ts` (tinte), `board.ts` (posizioni sulla griglia CSS), `storage.ts` (localStorage in try/catch), `runner.ts` (Worker con ripiego sul thread principale). `ui.ts` resta il più grande (circa 970 righe): i prossimi candidati da separare sono tastiera, tutorial e record.
 - La build deve restare **un unico file HTML** che funziona aprendolo con doppio clic (`file://`), senza server. Il Worker è incluso inline (`./worker?worker&inline`).
 - `localStorage` sempre dentro try/catch: il gioco deve funzionare anche senza.
 - Sicurezza (assessment del 2026-10-29):

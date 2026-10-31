@@ -32,7 +32,12 @@ npm run build      # crea dist/index.html, file unico da aprire con doppio clic 
 | `src/records.ts` | Record personali per griglia, livello e variante |
 | `src/worker.ts` | Genera i puzzle in un Web Worker, senza bloccare la pagina |
 | `src/game.ts` | Stato partita: posa/rimozione, annulla, suggerimenti (con il motivo), vittoria, cronometro |
-| `src/ui.ts` | Rendering, input mouse/touch, tema, impostazioni salvate |
+| `src/hint-text.ts` | Le parole del suggerimento: nomi degli indizi ("il 6 verde"), frasi, passi delle spiegazioni |
+| `src/ui.ts` | Rendering, input mouse/touch e tastiera, tema, impostazioni, tutorial, record |
+| `src/loader.ts` | Animazione d'attesa mentre si genera un puzzle |
+| `src/colors.ts`, `src/board.ts` | Tinte degli indizi; posizioni sulla griglia |
+| `src/storage.ts`, `src/stored.ts` | Dati nel browser: lettura e scrittura sicure, controllo di ciò che si rilegge |
+| `src/runner.ts` | Lavori nel Web Worker, con ripiego se il browser non lo permette |
 
 La logica (`types`, `rng`, `generator`, `solver`, `grader`, `game`) non usa il DOM ed è coperta dai test in `tests/`.
 

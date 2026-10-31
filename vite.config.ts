@@ -1,7 +1,7 @@
 import type { Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { defineConfig } from "vitest/config";
-import pkg from "./package.json";
+import pkg from "./package.json" with { type: "json" };
 
 /** Impronta CSP di uno script (Web Crypto: niente @types/node solo per questo). */
 async function sha256(text: string): Promise<string> {
