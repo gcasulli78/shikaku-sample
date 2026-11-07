@@ -4,12 +4,12 @@ import { type SolveInput, solve } from "./solver";
 import { type Clue, DIFFICULTIES, MAX_SIZE, MIN_SIZE, type Shape, type Variant } from "./types";
 
 /**
- * Un puzzle nel link: gli indizi stessi, non il seed. Il generatore ha un tempo limite,
- * quindi lo stesso seed su un dispositivo lento può dare un altro puzzle, e cambiando il
- * generatore cambierebbero i link vecchi. Formato, in base64url:
- *   versione, variante, righe, colonne; con le Caselle nere quante sono e le loro celle;
- *   poi per indizio: cella (r * cols + c), un byte con numero sì/no (bit 3) e forma
- *   (bit 0-2), e il numero se c'è.
+ * A puzzle in the link: the clues themselves, not the seed. The generator has a time limit, so the
+ * same seed on a slow device may give another puzzle, and changing the generator would change old
+ * links. Format, in base64url:
+ *   version, variant, rows, columns; with Blocked, how many black cells there are and their cells;
+ *   then per clue: cell (r * cols + c), a byte with number yes/no (bit 3) and shape
+ *   (bits 0-2), and the number if present.
  */
 const VERSION = 1;
 const SHAPES: (Shape | undefined)[] = [undefined, "square", "oblong", "wide", "tall"];
@@ -33,7 +33,7 @@ export function encodePuzzle({ rows, cols, clues, blocked, variant }: SharedPuzz
     .replace(/=+$/, "");
 }
 
-/** undefined se il codice è rovinato o di una versione sconosciuta. */
+/** undefined if the code is corrupted or of an unknown version. */
 export function decodePuzzle(code: string): SharedPuzzle | undefined {
   let bytes: number[];
   try {
@@ -77,19 +77,17 @@ export function decodePuzzle(code: string): SharedPuzzle | undefined {
   return blocked.length > 0 ? { rows, cols, clues, blocked, variant } : { rows, cols, clues, variant };
 }
 
-/** Passi massimi del solver per un puzzle da link (uno generato ne chiede di solito meno di mille). */
+/** Maximum solver steps for a puzzle from a link (a generated one usually needs fewer than a thousand). */
 const LINK_BUDGET = 200_000;
 /**
- * Tempo massimo del solver per un link, in ms: un link costruito ad arte (tanti "?" su un
- * 15×15) teneva il solver occupato 36 s prima di esaurire i passi. I puzzle generati si
- * risolvono in pochi ms.
+ * Maximum solver time for a link, in ms: a crafted link (many "?" on a 15×15) kept the solver busy
+ * for 36 s before running out of steps. Generated puzzles are solved in a few ms.
  */
 export const LINK_TIME_MS = 2000;
 
 /**
- * Il puzzle completo da giocare: soluzione dal solver, livello dal valutatore.
- * undefined se non ha una soluzione unica (link modificato a mano) o se il solver non
- * finisce in tempo.
+ * The complete puzzle to play: solution from the solver, level from the grader. undefined if it
+ * doesn't have a unique solution (link edited by hand) or if the solver doesn't finish in time.
  */
 export function completePuzzle(input: SolveInput): GenerateResult | undefined {
   const result = solve(input, 2, LINK_BUDGET, LINK_TIME_MS);

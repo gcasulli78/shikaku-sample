@@ -1,8 +1,8 @@
 /**
- * Gioco da tastiera: un cursore sulla griglia; Invio (o spazio) fissa un angolo e poi posa
- * con la stessa logica del trascinamento; Esc annulla la selezione, Canc toglie il
- * rettangolo sotto il cursore. Il cursore si vede solo dopo un tasto e sparisce col mouse.
- * Ogni mossa si annuncia ai lettori di schermo.
+ * Keyboard play: a cursor on the grid; Enter (or space) fixes a corner and then places with the
+ * same logic as dragging; Esc cancels the selection, Delete removes the rectangle under the cursor.
+ * The cursor shows only after a key press and disappears with the mouse. Every move is announced to
+ * screen readers.
  */
 import { cellArea } from "./board";
 import type { Game } from "./game";
@@ -10,17 +10,17 @@ import { clueLabel } from "./labels";
 import { moveSelection, type Selection, selectionRect, startSelection } from "./selection";
 import type { Rect } from "./types";
 
-/** Quello che il cursore usa della partita e dell'interfaccia (vedi ui.ts). */
+/** What the cursor uses from the game and the UI (see ui.ts). */
 export interface KeyboardContext {
   board: HTMLElement;
-  /** Dove si scrive l'annuncio per i lettori di schermo. */
+  /** Where the announcement for screen readers is written. */
   sr: HTMLElement;
-  /** La partita in gioco (nessuna prima della prima generazione). */
+  /** The game in play (none before the first generation). */
   game(): Game | undefined;
   solved(): boolean;
-  /** Posa la selezione come al rilascio del trascinamento. */
+  /** Places the selection as on drag release. */
   commit(sel: Selection): void;
-  /** Toglie un rettangolo posato, come un tocco. */
+  /** Removes a placed rectangle, like a tap. */
   remove(rect: Rect): void;
   render(): void;
   showPreview(sel: Selection): void;
@@ -28,9 +28,9 @@ export interface KeyboardContext {
 }
 
 export interface Keyboard {
-  /** Ridisegna il cursore (dopo ogni render, che svuota la griglia). */
+  /** Redraws the cursor (after each render, which empties the grid). */
   render(): void;
-  /** Si torna al mouse o al dito: cursore e selezione da tastiera spariscono. */
+  /** Back to mouse or finger: the keyboard cursor and selection disappear. */
   release(): void;
 }
 
@@ -38,10 +38,10 @@ const MOVES: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [
 
 export function setupKeyboard(ctx: KeyboardContext): Keyboard {
   const { board } = ctx;
-  /** Il cursore si vede solo usando la tastiera, finché non si torna al mouse. */
+  /** The cursor shows only while using the keyboard, until going back to the mouse. */
   let active = false;
   let cursor: [number, number] = [0, 0];
-  /** La selezione da tastiera, dalla casella dove si è premuto Invio. */
+  /** The keyboard selection, from the cell where Enter was pressed. */
   let selecting: Selection | undefined;
   let cursorEl: HTMLDivElement | undefined;
 
@@ -59,7 +59,7 @@ export function setupKeyboard(ctx: KeyboardContext): Keyboard {
     if (selecting) ctx.showPreview(selecting);
   };
 
-  /** Cosa c'è sotto il cursore, per i lettori di schermo. */
+  /** What is under the cursor, for screen readers. */
   const announce = (game: Game) => {
     const [r, c] = cursor;
     const clue = game.puzzle.clues.find((cl) => cl.r === r && cl.c === c);

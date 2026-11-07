@@ -16,7 +16,7 @@ const SIZES: [number, number][] = [
 ];
 const PUZZLES_PER_SIZE = 50;
 
-/** Copertura esatta della griglia, caselle nere escluse (contano come già coperte). */
+/** Exact coverage of the grid, black cells excluded (they count as already covered). */
 function expectExactCover(rows: number, cols: number, rects: Rect[], blocked: number[] = []) {
   const seen = new Uint8Array(rows * cols);
   for (const idx of blocked) seen[idx] = 1;
@@ -81,7 +81,7 @@ describe("generate", () => {
         `${rows}×${cols}: media ${avg.toFixed(1)} ms, max ${max.toFixed(1)} ms, numeri "1": ${(singleShare * 100).toFixed(1)}%`,
       );
       expect(avg).toBeLessThan(1000);
-      // Gli 1×1 sono indizi banali: devono restare rari.
+      // 1×1s are trivial clues: they must stay rare.
       expect(singleShare).toBeLessThan(0.05);
     }, 120_000);
   }
@@ -92,7 +92,7 @@ describe("generate", () => {
 });
 
 describe("generate con difficoltà", () => {
-  // Esperto e Maestro sono più rari e lenti: meno seed e più candidati (senza limite di tempo, per restare deterministici).
+  // Expert and Master are rarer and slower: fewer seeds and more candidates (no time limit, to stay deterministic).
   const CASES: [number, number, Difficulty, number][] = [
     [8, 8, "easy", 10],
     [8, 8, "medium", 10],
@@ -138,7 +138,7 @@ describe("generate con difficoltà", () => {
           }
         }
       }
-      // Tutti i tipi di indizio compaiono: forma indicata, orientata, area aperta, "?".
+      // All clue kinds appear: given shape, oriented, open area, "?".
       expect(open.shape).toBeGreaterThan(0);
       expect(open.oriented).toBeGreaterThan(0);
       expect(open.area).toBeGreaterThan(0);
@@ -160,7 +160,7 @@ describe("generate con difficoltà", () => {
       for (let seed = 1; seed <= 3; seed++) {
         const p = generate({ rows: 10, cols: 10, difficulty, variant: "blocked", seed });
         expectValidPuzzle(p);
-        // Si annerisce un pezzo intero, quindi si può sforare di una casella.
+        // A whole piece is blackened, so it can overshoot by one cell.
         expect(p.blocked!.length, `${difficulty} seed ${seed}`).toBeGreaterThanOrEqual(black);
         expect(p.blocked!.length).toBeLessThanOrEqual(black + 1);
         expect(p.clues.some((cl) => p.blocked!.includes(cl.r * p.cols + cl.c))).toBe(false);
@@ -197,7 +197,7 @@ describe("generate con difficoltà", () => {
   it("rispetta il limite di tempo", () => {
     const start = Date.now();
     generate({ rows: 15, cols: 15, difficulty: "expert", seed: 3, maxCandidates: 10_000, timeLimitMs: 500 });
-    // Il candidato in corso può sforare un poco.
+    // The current candidate can overshoot a little.
     expect(Date.now() - start).toBeLessThan(1500);
   });
 });

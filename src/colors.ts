@@ -1,25 +1,25 @@
-/** Le tinte degli indizi e come darle agli elementi. */
+/** The clue hues and how to apply them to elements. */
 import type { Clue } from "./types";
 
-/** Tinte OKLCH ben distinte tra loro, alla stessa luminosità (vedi --pill-l in style.css). */
+/** Clearly distinct OKLCH hues, at the same lightness (see --pill-l in style.css). */
 export const HUES = [250, 150, 55, 320, 25, 195, 95, 285];
 
 /**
- * La stessa tinta in HSL, per i browser senza oklch() (Safari prima di 15.4, Firefox prima
- * di 113): calcolata convertendo il colore della pastiglia. Vedi @supports in style.css.
+ * The same hue in HSL, for browsers without oklch() (Safari before 15.4, Firefox before 113):
+ * computed by converting the pill color. See @supports in style.css.
  */
 export const HSL_HUES: Record<number, number> = { 250: 207, 150: 146, 55: 28, 320: 289, 25: 2, 195: 181, 95: 47, 285: 246 };
 
-/** Dà a un elemento la tinta di un indizio: --h per oklch(), --hh per l'alternativa HSL. */
+/** Gives an element the hue of a clue: --h for oklch(), --hh for the HSL fallback. */
 export function tint(el: HTMLElement, hue: number): void {
   el.style.setProperty("--h", String(hue));
   el.style.setProperty("--hh", String(HSL_HUES[hue] ?? hue));
 }
 
 /**
- * Una tinta per indizio, diversa da quelle degli indizi vicini (entro tre caselle), così
- * due pastiglie uguali non stanno accanto. Dipende solo dalla posizione degli indizi, non
- * dalla soluzione: i colori non devono suggerire niente.
+ * One hue per clue, different from those of nearby clues (within three cells), so two equal pills
+ * never sit side by side. Depends only on the clue positions, not on the solution: the colors must
+ * not give anything away.
  */
 export function assignHues(clues: Clue[]): number[] {
   const hues: number[] = [];
@@ -33,7 +33,7 @@ export function assignHues(clues: Clue[]): number[] {
     }
     const candidates = HUES.map((_, k) => HUES[(k + offset + i) % HUES.length]!);
     const free = candidates.find((h) => !used.has(h));
-    // Con tutti i colori già usati vicino si prende il meno usato.
+    // When all colors are already used nearby, the least used one is taken.
     hues.push(free ?? candidates.reduce((best, h) => ((used.get(h) ?? 0) < (used.get(best) ?? 0) ? h : best)));
   });
   return hues;

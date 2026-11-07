@@ -1,5 +1,5 @@
 import { test } from "vitest";
 import { measure } from "./run";
 
-// Un file per variante: Vitest le misura in parallelo.
+// One file per variant: Vitest measures them in parallel.
 test("Caselle nere", () => measure("blocked"), 3_600_000);

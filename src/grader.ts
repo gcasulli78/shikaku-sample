@@ -2,27 +2,26 @@ import { type Candidate, candidatesFor, clueIndexMap, type SolveInput } from "./
 import { DIFFICULTIES, type Difficulty, type Rect, sameRect } from "./types";
 
 /**
- * Valuta la difficoltà risolvendo come farebbe una persona: regole in ordine di costo,
- * ripartendo dalla più semplice dopo ogni progresso. La difficoltà è la regola più
- * avanzata di cui c'è stato bisogno.
+ * Grades the difficulty by solving the way a person would: rules in order of cost, starting again
+ * from the simplest after each progress. The difficulty is the most advanced rule that was needed.
  *
- *  0 Facile    forma unica: un numero con un solo rettangolo possibile.
- *  1 Medio     cella contesa da un solo numero; celle comuni a tutte le forme di un numero.
- *  2 Difficile nessun buco: si scarta una forma che lascerebbe celle o numeri senza copertura.
- *  3 Esperto   ipotesi: si prova una forma (tra al massimo 3) e la si scarta se con le
- *              deduzioni di Facile e Medio porta a contraddizione.
- *  4 Maestro   ipotesi profonda: tra al massimo 6 forme, e per smentirla possono servire
- *              i buchi o una seconda ipotesi dentro la prima.
+ *  0 Easy      single shape: a number with only one possible rectangle.
+ *  1 Medium    cell contested by a single number; cells shared by all shapes of a number.
+ *  2 Hard      no holes: a shape is discarded if it would leave cells or numbers without coverage.
+ *  3 Expert    guess: a shape is tried (among at most 3) and discarded if, with the Easy and
+ *              Medium deductions, it leads to a contradiction.
+ *  4 Master    deep guess: among at most 6 shapes, and refuting it may need the holes or a
+ *              second guess inside the first.
  */
 
 export interface GradeResult {
   difficulty: Difficulty;
-  /** Quante volte è stata usata ogni regola, per livello. */
+  /** How many times each rule was used, per level. */
   steps: number[];
   solved: boolean;
-  /** Rettangoli posati, per indice di numero (undefined se non risolto). */
+  /** Placed rectangles, by number index (undefined if unsolved). */
   placed: (Rect | undefined)[];
-  /** Passi di deduzione usati (vedi WORK_BUDGET). */
+  /** Deduction steps used (see WORK_BUDGET). */
   work: number;
 }
 
@@ -43,7 +42,7 @@ function overlapsCells(cand: Candidate, cells: Set<number> | Uint8Array): boolea
   return cand.cells.some((idx) => cells.has(idx));
 }
 
-/** Posa la forma del numero i e toglie agli altri le forme che la toccano. */
+/** Places the shape of number i and removes from the others the shapes that touch it. */
 function place(s: State, i: number, cand: Candidate): void {
   s.placed[i] = cand.rect;
   s.cands[i] = [cand];
@@ -54,7 +53,7 @@ function place(s: State, i: number, cand: Candidate): void {
   });
 }
 
-/** Perché uno stato è impossibile: un numero senza più forme, o una cella che nessuno copre. */
+/** Why a state is impossible: a number with no shapes left, or a cell nobody covers. */
 export type Conflict = { kind: "starved"; clue: number } | { kind: "uncovered"; cell: number };
 
 function conflictIn(s: State, total: number): Conflict | undefined {
@@ -73,7 +72,7 @@ function isContradiction(s: State, total: number): boolean {
   return conflictIn(s, total) !== undefined;
 }
 
-// --- Regole ---
+// --- Rules ---
 
 function ruleSingle(s: State): Outcome {
   for (let i = 0; i < s.cands.length; i++) {
@@ -130,7 +129,7 @@ function ruleSureCells(s: State): Outcome {
   return outcome;
 }
 
-/** Posare cand (del numero i) lascerebbe un numero senza forme o una cella scoperta? */
+/** Would placing cand (of number i) leave a number without shapes or an uncovered cell? */
 function leavesHole(s: State, i: number, cand: Candidate, total: number, covered: Uint8Array, taken: Uint8Array): boolean {
   covered.fill(0);
   taken.fill(0);
@@ -165,18 +164,18 @@ function ruleNoHole(s: State, total: number): Outcome {
 }
 
 /**
- * Le ipotesi si fanno solo sui numeri con poche forme possibili, come farebbe una persona:
- * quante forme al massimo e fino a che livello si ragiona dentro l'ipotesi.
+ * Guesses are only made on numbers with few possible shapes, as a person would: how many shapes at
+ * most and up to which level to reason inside the guess.
  */
 const GUESS = { options: 3, level: 1 };
 const DEEP_GUESS = { options: 6, level: 3 };
 
 /**
- * Passi di deduzione concessi a una valutazione, ipotesi comprese. Con molti indizi
- * aperti le ipotesi profonde esplodono (fino a secondi per puzzle): finito il budget ci
- * si ferma come se non ci fossero altre deduzioni, quindi nessuna forma viene scartata
- * a torto e il puzzle risulta solo "non risolto". Misurato su 15×15: nel Classico
- * una valutazione non supera ~3000 passi, nelle Forme arrivava a 60000 (10 s).
+ * Deduction steps allowed for a grading, guesses included. With many open clues deep guesses
+ * explode (up to seconds per puzzle): when the budget runs out it stops as if there were no more
+ * deductions, so no shape is wrongly discarded and the puzzle only comes out as "unsolved".
+ * Measured on 15×15: in Classic a grading doesn't exceed ~3000 steps, in Shapes it reached 60000
+ * (10 s).
  */
 export const WORK_BUDGET = 8000;
 
@@ -184,7 +183,7 @@ interface Work {
   done: number;
 }
 
-/** Applica le regole fino al livello maxLevel finché c'è progresso. */
+/** Applies the rules up to level maxLevel as long as there is progress. */
 function propagate(s: State, total: number, maxLevel: number, steps: number[], work: Work): "solved" | "stuck" | "contradiction" {
   for (;;) {
     if (++work.done > WORK_BUDGET) return "stuck";
@@ -214,9 +213,9 @@ function propagate(s: State, total: number, maxLevel: number, steps: number[], w
 }
 
 /**
- * Prova ogni forma (prima i numeri con meno scelte) e scarta quelle che portano a
- * contraddizione seguendo le regole fino a guess.level (il controllo di contraddizione
- * ad ogni passo copre già i buchi più evidenti).
+ * Tries each shape (numbers with fewer choices first) and discards those that lead to a
+ * contradiction following the rules up to guess.level (the contradiction check at each step already
+ * covers the most obvious holes).
  */
 function ruleGuess(s: State, total: number, guess: { options: number; level: number }, work: Work): Outcome {
   const order = s.cands
@@ -247,7 +246,7 @@ function ruleGuess(s: State, total: number, guess: { options: number; level: num
 
 function initialState(input: SolveInput): State {
   const clueAt = clueIndexMap(input);
-  // Le caselle nere sono come già coperte: nessuna regola deve occuparsene.
+  // Black cells are like already covered: no rule must deal with them.
   const occupied = new Uint8Array(input.rows * input.cols);
   for (const idx of input.blocked ?? []) occupied[idx] = 1;
   return {
@@ -257,7 +256,7 @@ function initialState(input: SolveInput): State {
   };
 }
 
-/** Posa un rettangolo se è una forma possibile del suo numero; false altrimenti. */
+/** Places a rectangle if it is a possible shape of its number; false otherwise. */
 function placeRect(s: State, rect: Rect): boolean {
   const i = s.cands.findIndex((list, j) => !s.placed[j] && list.some((cand) => sameRect(cand.rect, rect)));
   if (i < 0) return false;
@@ -265,14 +264,14 @@ function placeRect(s: State, rect: Rect): boolean {
   return true;
 }
 
-/** Lo stato iniziale con i pezzi già posati (corretti). */
+/** The initial state with the pieces already placed (correct). */
 function stateWith(input: SolveInput, given: readonly Rect[]): State {
   const s = initialState(input);
   for (const rect of given) placeRect(s, rect);
   return s;
 }
 
-/** maxLevel limita le regole usate: oltre, il puzzle risulta non risolto. */
+/** maxLevel limits the rules used: beyond it, the puzzle comes out unsolved. */
 export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): GradeResult {
   const total = input.rows * input.cols;
   const state = initialState(input);
@@ -290,16 +289,16 @@ export function grade(input: SolveInput, maxLevel = DIFFICULTIES.length - 1): Gr
 }
 
 /**
- * Cosa non va in una forma scartata, guardando la griglia dopo averla posata: una casella
- * che nessun numero può più coprire, o un numero rimasto senza spazio.
+ * What's wrong with a discarded shape, looking at the grid after placing it: a cell no number can
+ * cover anymore, or a number left without room.
  */
 export type Problem = { cell: number } | { clue: number };
 
 /**
- * Una forma scartata e il problema che crea; forced: la catena, i numeri che con quella
- * forma possono stare in un solo modo, uno dopo l'altro (vuota se il problema è immediato).
- * Un numero è obbligato se gli resta una forma sola, o (cell) se è l'unico ad arrivare a
- * una casella e ci arriva in un modo solo.
+ * A discarded shape and the problem it creates; forced: the chain, the numbers that with that shape
+ * can fit in only one way, one after the other (empty if the problem is immediate). A number is
+ * forced if it has a single shape left, or (cell) if it is the only one reaching a cell and reaches
+ * it in only one way.
  */
 export interface Discard {
   rect: Rect;
@@ -308,33 +307,33 @@ export interface Discard {
 }
 
 /**
- * Come si arriva al pezzo: "single" se il numero ha una sola forma possibile, "direct" se
- * ogni altra forma crea subito un problema, "chain" se per qualcuna serve un passo in più.
+ * How the piece is reached: "single" if the number has only one possible shape, "direct" if every
+ * other shape immediately creates a problem, "chain" if some of them need one more step.
  */
 export type DeductionKind = "single" | "direct" | "chain";
 
 export interface Deduction {
-  /** Indice del numero e la sua forma, ormai obbligata. */
+  /** Index of the number and its shape, now forced. */
   clue: number;
   rect: Rect;
   kind: DeductionKind;
-  /** Le altre forme possibili, ognuna con il suo problema (vuoto se "single"). */
+  /** The other possible shapes, each with its problem (empty if "single"). */
   discards: Discard[];
   /**
-   * La casella che solo questo numero raggiunge, se è il problema di tutte le forme
-   * scartate: allora basta dire quella ("solo il 6 arriva alla casella evidenziata").
+   * The cell only this number reaches, if it is the problem of all the discarded shapes: then
+   * saying that one is enough ("solo il 6 arriva alla casella evidenziata").
    */
   only?: number;
 }
 
-/** Distanza tra una cella e il centro di un rettangolo, in caselle. */
+/** Distance between a cell and the center of a rectangle, in cells. */
 function distance(idx: number, cols: number, rect: Rect): number {
   const r = Math.floor(idx / cols);
   const c = idx % cols;
   return Math.abs(r + 0.5 - (rect.r + rect.h / 2)) + Math.abs(c + 0.5 - (rect.c + rect.w / 2));
 }
 
-/** Il problema più vicino a rect nello stato s (undefined se non ce n'è). */
+/** The problem closest to rect in state s (undefined if there is none). */
 function problemNear(s: State, input: SolveInput, rect: Rect): Problem | undefined {
   const { cols } = input;
   const total = input.rows * cols;
@@ -353,7 +352,7 @@ function problemNear(s: State, input: SolveInput, rect: Rect): Problem | undefin
   return best?.problem;
 }
 
-/** I numeri obbligati nello stato (vedi Discard): non lo erano già sulla griglia visibile s. */
+/** The forced numbers in the state (see Discard): they weren't already forced on the visible grid s. */
 function forcedIn(state: State, s: State, input: SolveInput): Discard["forced"] {
   const steps: Discard["forced"] = [];
   const seen = (j: number, rect: Rect) => steps.some((st) => st.clue === j && sameRect(st.rect, rect));
@@ -376,14 +375,14 @@ function forcedIn(state: State, s: State, input: SolveInput): Discard["forced"] 
   return steps;
 }
 
-/** Pezzi obbligati al massimo in una catena: oltre, la spiegazione non si segue più. */
+/** Maximum forced pieces in a chain: beyond that, the explanation can't be followed anymore. */
 export const MAX_CHAIN = 3;
 
 /**
- * Perché la forma cand del numero i è impossibile, guardando solo la griglia: posata, crea
- * subito un problema; oppure (catena) un altro numero può stare solo in un modo, posato
- * anche quello magari un altro ancora, fino al problema. La catena più corta, al massimo
- * MAX_CHAIN pezzi. undefined se non si vede così.
+ * Why shape cand of number i is impossible, looking only at the grid: once placed, it immediately
+ * creates a problem; or (chain) another number can fit in only one way, and once that is placed
+ * maybe yet another one, up to the problem. The shortest chain, at most MAX_CHAIN pieces. undefined
+ * if it can't be seen this way.
  */
 function discardOf(s: State, input: SolveInput, i: number, cand: Candidate, maxChain: number): Discard | undefined {
   const first = cloneState(s);
@@ -410,16 +409,15 @@ function discardOf(s: State, input: SolveInput, i: number, cand: Candidate, maxC
 }
 
 /**
- * Il prossimo pezzo, ragionando come una persona su un numero alla volta: "dove può stare?".
- * Si guarda solo la griglia visibile (i pezzi posati, che devono essere corretti): le forme
- * possibili sono quelle che non toccano pezzi, altri numeri o caselle nere. Un numero si
- * deduce se tutte le sue forme tranne una hanno un problema che si vede (discardOf).
- * Tra i numeri che si deducono si sceglie il più semplice: forma unica, poi problemi
- * immediati, poi catene corte; a parità meno forme da scartare, poi il più vicino a near
- * (l'ultima mossa). Niente regole astratte ("solo lui può coprire la casella", ipotesi con
- * contraddizioni non dette): segnalato dall'utente, le frasi non si capivano e sembravano
- * sbagliate. Le catene più lunghe sono le più costose: dopo maxMs ci si accontenta di
- * quello che si è trovato. undefined se nessun numero si deduce così.
+ * The next piece, reasoning like a person on one number at a time: "where can it go?". Only the
+ * visible grid is considered (the placed pieces, which must be correct): the possible shapes are
+ * those that don't touch pieces, other numbers or black cells. A number is deduced if all its
+ * shapes but one have a visible problem (discardOf). Among the deducible numbers the simplest is
+ * chosen: single shape, then immediate problems, then short chains; on a tie fewer shapes to
+ * discard, then the closest to near (the last move). No abstract rules ("only it can cover the
+ * cell", guesses with unstated contradictions): reported by the user, the sentences were hard to
+ * understand and seemed wrong. Longer chains are the most expensive: after maxMs it settles for
+ * what it has found. undefined if no number can be deduced this way.
  */
 export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: Rect, maxMs = Infinity): Deduction | undefined {
   const deadline = performance.now() + maxMs;
@@ -431,13 +429,13 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: 
   const singles = open.filter((i) => s.cands[i]!.length === 1);
   if (singles.length > 0) return { clue: singles[0]!, rect: s.cands[singles[0]!]![0]!.rect, kind: "single", discards: [] };
 
-  // Catene sempre più lunghe solo se le più corte non bastano: è anche molto più veloce.
+  // Ever longer chains only if the shorter ones aren't enough: it's also much faster.
   let best: { found: Deduction; cost: number } | undefined;
   for (let maxChain = 0; maxChain <= MAX_CHAIN && !best; maxChain++) {
     for (const i of open) {
       if (performance.now() > deadline) break;
       const list = s.cands[i]!;
-      // Con più forme da scartare non può battere il migliore.
+      // With more shapes to discard it can't beat the best one.
       if (best && list.length - 1 > best.found.discards.length) continue;
       let survivor: Candidate | undefined;
       const discards: Discard[] = [];
@@ -451,13 +449,13 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: 
       }
       if (!survivor || discards.length !== list.length - 1) continue;
       const kind: DeductionKind = discards.some((dis) => dis.forced.length > 0) ? "chain" : "direct";
-      // A parità di catena meno forme da scartare, poi il più vicino (open è in ordine).
+      // On equal chains fewer shapes to discard, then the closest (open is in order).
       if (!best || discards.length < best.cost)
         best = { found: { clue: i, rect: survivor.rect, kind, discards }, cost: discards.length };
     }
   }
-  // Una casella che solo questo numero raggiunge e che nessuna forma scartata copre: è il
-  // problema di tutte, e basta mostrare quella.
+  // A cell only this number reaches and that no discarded shape covers: it is the problem of all of
+  // them, and showing that one is enough.
   if (best && best.found.kind !== "single") {
     const found = best.found;
     const rest = s.cands[found.clue]!.filter((cand) => !sameRect(cand.rect, found.rect));
@@ -476,16 +474,16 @@ export function nextDeduction(input: SolveInput, given: readonly Rect[], near?: 
   return best?.found;
 }
 
-/** Tetto per chiamata di solvableByDeduction: largo, conta che la deduzione esista. */
+/** Cap per call of solvableByDeduction: generous, what matters is that the deduction exists. */
 const SIMULATION_CALL_MS = 2000;
 
 /**
- * Si arriva in fondo con le sole deduzioni dei suggerimenti (nextDeduction), partendo dalla
- * griglia vuota e posando ogni volta il pezzo dedotto? Basta questa partita: posare pezzi
- * giusti non toglie deduzioni (le forme scartate restano scartate, i pezzi obbligati restano
- * obbligati o hanno ormai una forma sola), quindi qualunque pezzo giusto abbia posato il
- * giocatore, la prima deduzione di questa sequenza che gli manca vale ancora. Il gioco al
- * clic ha un tetto più basso (DEDUCTION_MS): su un dispositivo lento può ancora ripiegare.
+ * Can the end be reached with the hint deductions alone (nextDeduction), starting from the empty
+ * grid and placing the deduced piece each time? This one game is enough: placing correct pieces
+ * doesn't remove deductions (discarded shapes stay discarded, forced pieces stay forced or are left
+ * with a single shape), so whatever correct pieces the player has placed, the first deduction of
+ * this sequence they are missing still holds. The game on click has a lower cap (DEDUCTION_MS): on
+ * a slow device it may still fall back.
  */
 export function solvableByDeduction(input: SolveInput, solution: readonly Rect[]): boolean {
   const given: Rect[] = [];
@@ -500,12 +498,11 @@ export function solvableByDeduction(input: SolveInput, solution: readonly Rect[]
 }
 
 /**
- * Perché rect (che rispetta il suo indizio) è sbagliato: posato sopra ai pezzi corretti
- * given, la contraddizione che si vede subito. Solo quella: una che arriva seguendo altri
- * passi il giocatore non la vede ("il 6 non avrebbe più spazio" quando il 6 è libero), e
- * nessuna frase breve la spiega. Misurato: anche le regole di un passo sulla griglia
- * visibile (casella di un solo indizio, celle sicure) danno solo contraddizioni immediate.
- * undefined se non ce n'è una immediata.
+ * Why rect (which matches its clue) is wrong: placed on top of the correct pieces given, the
+ * contradiction that can be seen immediately. Only that one: one that comes from following other
+ * steps is invisible to the player ("il 6 non avrebbe più spazio" when the 6 is free), and no short
+ * sentence explains it. Measured: even the one-step rules on the visible grid (cell of a single
+ * clue, safe cells) only give immediate contradictions. undefined if there is no immediate one.
  */
 export function conflictOf(input: SolveInput, given: readonly Rect[], rect: Rect): Conflict | undefined {
   const s = stateWith(input, given);

@@ -17,17 +17,17 @@ import {
 } from "./types";
 
 /**
- * Ciò che si rilegge da localStorage può essere vecchio, rovinato o scritto da un'altra
- * pagina della stessa origine (con file:// sono tutti i file locali). Ogni valore si
- * controlla prima di usarlo: con un livello sconosciuto o una griglia 3000×3000 il gioco
- * non partiva più. Quello che non torna si scarta (o prende il valore predefinito).
+ * What is read back from localStorage may be old, corrupted or written by another page of the same
+ * origin (with file:// that's every local file). Every value is checked before use: with an unknown
+ * level or a 3000×3000 grid the game would no longer start. Whatever doesn't fit is discarded (or
+ * takes the default value).
  */
 
 export type Theme = "auto" | "light" | "dark";
 const THEMES: Theme[] = ["auto", "light", "dark"];
 const SHAPES: Shape[] = ["square", "oblong", "wide", "tall"];
 
-/** Griglia personalizzata nel menu delle dimensioni. */
+/** Custom grid in the size menu. */
 export const CUSTOM = "custom";
 
 export interface Settings {
@@ -46,13 +46,13 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "auto",
 };
 
-/** La partita in corso, salvata a ogni mossa per riprenderla riaprendo la pagina. */
+/** The game in progress, saved at every move so it can be resumed when reopening the page. */
 export interface SavedState {
   puzzle: GenerateResult;
   variant: Variant;
   game: SavedGame;
   elapsed: number;
-  /** La nota dopo griglia e variante (" · da un link"…), testo semplice. */
+  /** The note after grid and variant (" · da un link"…), plain text. */
   note: string;
 }
 
@@ -70,7 +70,7 @@ function isTime(v: unknown): v is number {
   return Number.isFinite(v) && (v as number) >= 0;
 }
 
-/** Tutti gli elementi validi, altrimenti undefined. */
+/** All the elements if valid, otherwise undefined. */
 function parseAll<T>(v: unknown, parse: (item: unknown) => T | undefined): T[] | undefined {
   if (!Array.isArray(v)) return undefined;
   const items: T[] = [];
@@ -105,7 +105,7 @@ function parseClue(v: unknown, rows: number, cols: number): Clue | undefined {
   return clue;
 }
 
-/** Un puzzle salvato (partita in corso o pronto in anticipo): griglia 4–15, indizi e soluzione dentro la griglia. */
+/** A saved puzzle (game in progress or prepared in advance): 4–15 grid, clues and solution inside the grid. */
 export function parsePuzzle(v: unknown): GenerateResult | undefined {
   if (!isObject(v)) return undefined;
   const { rows, cols, seed, unique, difficulty, logical } = v;
@@ -113,7 +113,7 @@ export function parsePuzzle(v: unknown): GenerateResult | undefined {
   if (!Number.isFinite(seed) || typeof unique !== "boolean" || !isDifficulty(difficulty) || typeof logical !== "boolean")
     return undefined;
   const clues = parseAll(v.clues, (item) => parseClue(item, rows, cols));
-  // La soluzione ha un rettangolo per indizio, nello stesso ordine.
+  // The solution has one rectangle per clue, in the same order.
   const solution = parseAll(v.solution, (item) => parseRect(item, rows, cols));
   if (!clues || clues.length === 0 || !solution || solution.length !== clues.length) return undefined;
   const used = new Set(clues.map((cl) => cl.r * cols + cl.c));
@@ -152,7 +152,7 @@ export function parseSavedState(v: unknown): SavedState | undefined {
   };
 }
 
-/** Le impostazioni, campo per campo: quelli che non tornano prendono il valore predefinito. */
+/** The settings, field by field: those that don't fit take the default value. */
 export function parseSettings(v: unknown): Settings {
   const s = isObject(v) ? v : {};
   const custom = isObject(s.custom) ? s.custom : {};
@@ -177,7 +177,7 @@ function parseRecordEntry(v: unknown): RecordEntry | undefined {
   return entry;
 }
 
-/** Record e puzzle pronti hanno chiavi griglia:livello:variante: si tengono solo le voci valide. */
+/** Records and ready puzzles have grid:level:variant keys: only valid entries are kept. */
 function parseKeyed<T>(v: unknown, parse: (value: unknown, key: string) => T | undefined): Record<string, T> {
   const result: Record<string, T> = {};
   if (!isObject(v)) return result;
@@ -193,7 +193,7 @@ export function parseRecords(v: unknown): Records {
   return parseKeyed(v, parseRecordEntry);
 }
 
-/** Puzzle pronti in anticipo: devono avere griglia e livello della loro chiave. */
+/** Puzzles prepared in advance: they must have the grid and level of their key. */
 export function parseReady(v: unknown): Record<string, GenerateResult> {
   return parseKeyed(v, (value, key) => {
     const { rows, cols, difficulty } = parseRecordKey(key)!;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { moveSelection, type Selection, selectionRect, startSelection } from "../src/selection";
 
-/** La selezione dopo aver passato il dito sulle caselle date, in ordine. */
+/** The selection after moving the finger over the given cells, in order. */
 function path(start: [number, number], ...cells: [number, number][]): Selection {
   return cells.reduce((sel, [r, c]) => moveSelection(sel, r, c), startSelection(...start));
 }
@@ -13,9 +13,9 @@ describe("selezione", () => {
   });
 
   it("partendo dal numero in mezzo si allarga da entrambi i lati", () => {
-    // 2×3 con il 6 in alto al centro: giù a sinistra, poi a destra passando sotto il 6.
+    // 2×3 with the 6 at the top center: down to the left, then to the right passing under the 6.
     expect(selectionRect(path([0, 1], [1, 1], [1, 0], [1, 1], [1, 2]))).toEqual({ r: 0, c: 0, h: 2, w: 3 });
-    // 1×6 con il numero al terzo posto: a sinistra fino in fondo, poi a destra (anche di colpo).
+    // 1×6 with the number in third place: left all the way, then right (even all at once).
     expect(selectionRect(path([0, 2], [0, 1], [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5]))).toEqual({
       r: 0,
       c: 0,
@@ -31,9 +31,9 @@ describe("selezione", () => {
   });
 
   it("tornando sulla riga di partenza il lato si richiude", () => {
-    // Un 1×3 in orizzontale, con una riga di troppo per sbaglio e poi corretta.
+    // A horizontal 1×3, with one row too many by mistake and then corrected.
     expect(selectionRect(path([0, 0], [0, 1], [1, 2], [0, 2]))).toEqual({ r: 0, c: 0, h: 1, w: 3 });
-    // Fermarsi sulla riga di partenza e muoversi lungo di essa non riapre il lato chiuso.
+    // Stopping on the starting row and moving along it doesn't reopen the closed side.
     expect(selectionRect(path([2, 2], [3, 2], [2, 2], [2, 3], [2, 4], [1, 4]))).toEqual({ r: 1, c: 2, h: 2, w: 3 });
   });
 });

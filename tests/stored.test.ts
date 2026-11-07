@@ -3,7 +3,7 @@ import { generate } from "../src/generator";
 import { recordKey } from "../src/records";
 import { DEFAULT_SETTINGS, parsePuzzle, parseReady, parseRecords, parseSavedState, parseSettings } from "../src/stored";
 
-/** Come si rilegge da localStorage: passando per JSON. */
+/** As read back from localStorage: going through JSON. */
 const roundTrip = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 
 describe("valori salvati in localStorage", () => {

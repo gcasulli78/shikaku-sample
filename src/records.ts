@@ -1,10 +1,10 @@
 import { type Difficulty, isDifficulty, isVariant, MAX_SIZE, MIN_SIZE, type Variant } from "./types";
 
-/** Record di una griglia, un livello e una variante. Tempi in ms. */
+/** Record for a grid, a level and a variant. Times in ms. */
 export interface RecordEntry {
   wins: number;
   best?: number;
-  /** Il miglior tempo senza aiuti. */
+  /** The best time without help. */
   bestClean?: number;
 }
 
@@ -21,7 +21,7 @@ export function recordKey({ rows, cols, difficulty, variant }: RecordKey): strin
   return `${rows}x${cols}:${difficulty}:${variant}`;
 }
 
-/** undefined se la chiave non è di una griglia 4–15 con livello e variante esistenti. */
+/** undefined if the key isn't for a 4–15 grid with an existing level and variant. */
 export function parseRecordKey(key: string): RecordKey | undefined {
   const match = /^(\d+)x(\d+):(\w+):(\w+)$/.exec(key);
   if (!match) return undefined;
@@ -32,7 +32,7 @@ export function parseRecordKey(key: string): RecordKey | undefined {
   return { rows, cols, difficulty, variant };
 }
 
-/** Registra una vittoria; dice se è un nuovo record, assoluto o senza aiuti. */
+/** Records a win; tells whether it's a new record, overall or without help. */
 export function recordWin(records: Records, key: string, time: number, clean: boolean): { best: boolean; bestClean: boolean } {
   const old = records[key] ?? { wins: 0 };
   const best = old.best === undefined || time < old.best;
@@ -42,6 +42,6 @@ export function recordWin(records: Records, key: string, time: number, clean: bo
     best: best ? time : old.best,
     bestClean: bestClean ? time : old.bestClean,
   };
-  // Al primo successo non c'è niente da battere: non si festeggia.
+  // On the first success there's nothing to beat: no celebration.
   return { best: best && old.wins > 0, bestClean: bestClean && old.bestClean !== undefined };
 }

@@ -8,7 +8,8 @@ test("si carica una griglia con i numeri colorati e la versione", async ({ page 
   await open(page, { size: "8x8", difficulty: "medium" });
   const { clues } = await puzzle(page);
   await expect(page.locator("#board .pill")).toHaveCount(clues.length);
-  // Un colore che il browser non capisce lascerebbe la pastiglia trasparente, numero invisibile.
+  // A color the browser doesn't understand would leave the pill transparent, with an invisible
+  // number.
   const background = await page
     .locator("#board .pill")
     .first()
@@ -44,7 +45,7 @@ test("da tastiera si posa e si toglie un rettangolo", async ({ page, isMobile })
   const rect = solution.find((r) => r.h * r.w > 1)!;
   const board = page.locator("#board");
   await board.focus();
-  // Il primo tasto mostra il cursore sulla prima casella senza spostarlo.
+  // The first key press shows the cursor on the first cell without moving it.
   await page.keyboard.press("ArrowUp");
   await expect(page.locator("#board .cursor")).toHaveCount(1);
   const go = async (r: number, c: number, from: [number, number]) => {
@@ -59,7 +60,7 @@ test("da tastiera si posa e si toglie un rettangolo", async ({ page, isMobile })
   await expect(page.locator("#board .rect.valid")).toHaveCount(1);
   await page.keyboard.press("Delete");
   await expect(page.locator("#board .rect")).toHaveCount(0);
-  // Con il mouse il cursore sparisce.
+  // With the mouse the cursor disappears.
   await page.mouse.move(10, 10);
   await drag(page, { r: 0, c: 0, h: 1, w: 1 });
   await expect(page.locator("#board .cursor")).toHaveCount(0);
@@ -84,13 +85,13 @@ test("il suggerimento aiuta a gradi: indizio, motivo, pezzo; a Medio se ne usano
   await expect(hint).toHaveText("Mostra il pezzo");
   await hint.click();
   await expect(page.locator("#board .rect.hinted")).toHaveCount(1);
-  // I gradi non contano, il pezzo posato sì.
+  // The steps don't count, the placed piece does.
   await expect(hint).toHaveText("Suggerimento (4)");
 });
 
 test("a Maestro il suggerimento si usa due volte, senza spiegazioni", async ({ page }) => {
-  // Da un link e con un seed fisso: generando nella pagina, sotto carico il Maestro può non
-  // arrivare in tempo e il gioco propone giustamente il livello vicino.
+  // From a link and with a fixed seed: when generating in the page, under load Master may not make
+  // it in time and the game rightly offers the nearest level.
   const master = generate({ rows: 8, cols: 8, difficulty: "master", seed: 1, maxCandidates: 1000 });
   expect(master.difficulty).toBe("master");
   await open(page, { size: "5x5", difficulty: "easy" }, `/#p=${encodePuzzle({ ...master, variant: "classic" })}`);
@@ -102,7 +103,7 @@ test("a Maestro il suggerimento si usa due volte, senza spiegazioni", async ({ p
   await hint.click();
   await expect(hint).toHaveText("Suggerimenti finiti");
   await expect(hint).toBeDisabled();
-  // A Maestro una verifica sola.
+  // At Master, a single check.
   const check = page.locator("#check");
   await expect(check).toHaveText("Verifica (1)");
   await check.click();
@@ -150,8 +151,8 @@ test("il tutorial si apre e uscendo si torna alla partita", async ({ page }) => 
 });
 
 test("senza oklch() i colori hanno l'alternativa HSL", async ({ page }) => {
-  // Simula un browser vecchio: ogni oklch( nella pagina diventa una funzione sconosciuta,
-  // compreso il controllo @supports, così vale il blocco con le tinte HSL.
+  // Simulates an old browser: every oklch( in the page becomes an unknown function, including the
+  // @supports check, so the block with the HSL hues applies.
   await page.route("**/", async (route) => {
     const response = await route.fetch();
     const html = (await response.text()).replaceAll("oklch(", "oklch-old(");

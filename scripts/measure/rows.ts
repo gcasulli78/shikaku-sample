@@ -1,6 +1,6 @@
 import type { Variant } from "../../src/types";
 
-/** Dove finiscono le misure: una riga JSON per puzzle, un file per variante. */
+/** Where the measurements go: one JSON line per puzzle, one file per variant. */
 export const OUT_DIR = "measurements";
 
 export interface Row {
@@ -13,9 +13,9 @@ export interface Row {
   genMs: number;
   simMs: number;
   maxCall: number;
-  /** Deduzioni oltre il tetto del gioco (300 ms): lì ripiegherebbero. */
+  /** Deductions over the game's cap (300 ms): there they would fall back. */
   slow: number;
-  /** Pezzi posati senza deduzione ("Nessuna deduzione semplice"). */
+  /** Pieces placed without a deduction ("Nessuna deduzione semplice"). */
   fallbacks: number;
   firstFail: number;
 }

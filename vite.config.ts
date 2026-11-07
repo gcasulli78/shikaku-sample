@@ -3,17 +3,17 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import { defineConfig } from "vitest/config";
 import pkg from "./package.json" with { type: "json" };
 
-/** Impronta CSP di uno script (Web Crypto: niente @types/node solo per questo). */
+/** CSP hash of a script (Web Crypto: no @types/node just for this). */
 async function sha256(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return `'sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}'`;
 }
 
 /**
- * Content Security Policy nel file unico: si esegue solo lo script del gioco (per impronta
- * sha256, calcolata dopo che viteSingleFile l'ha inserito nell'HTML), il Worker parte da
- * blob: (o data:), niente connessioni né risorse esterne. Codice iniettato nella pagina
- * (un onerror="…" finito in un innerHTML) viene bloccato dal browser.
+ * Content Security Policy in the single file: only the game script runs (by sha256 hash, computed
+ * after viteSingleFile has inlined it into the HTML), the Worker starts from blob: (or data:), no
+ * external connections or resources. Code injected into the page (an onerror="…" ending up in an
+ * innerHTML) is blocked by the browser.
  */
 function contentSecurityPolicy(): Plugin {
   return {
@@ -48,9 +48,9 @@ function contentSecurityPolicy(): Plugin {
 }
 
 export default defineConfig({
-  // La versione si vede in fondo alla pagina: così si sa se il sito è aggiornato.
+  // The version shows at the bottom of the page: that way you know whether the site is up to date.
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  // La CSP va dopo viteSingleFile: l'impronta è quella dello script già inserito.
+  // The CSP goes after viteSingleFile: the hash is that of the already inlined script.
   plugins: [viteSingleFile(), contentSecurityPolicy()],
   test: {
     include: ["tests/**/*.test.ts"],

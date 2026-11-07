@@ -4,7 +4,7 @@ import { generate } from "../src/generator";
 import { clueName, explainFrames, HUE_NAMES, hintText, leftText, type Namer, otherName } from "../src/hint-text";
 import type { Clue } from "../src/types";
 
-/** Come in ui.ts: il colore dalla posizione nell'elenco degli indizi (qui una tinta fissa a turno). */
+/** As in ui.ts: the color from the position in the clue list (here a fixed hue in turn). */
 function namer(clues: Clue[]): Namer {
   const hues = Object.keys(HUE_NAMES).map(Number);
   return (clue, prep = "") => {
@@ -54,14 +54,14 @@ describe("suggerimento limitato", () => {
   });
 });
 
-/** Le spiegazioni dei primi suggerimenti su alcune partite vere, dalla griglia vuota. */
+/** The explanations of the first hints on some real games, from the empty grid. */
 function realReasons(): { reason: Reason; clues: Clue[] }[] {
   const found: { reason: Reason; clues: Clue[] }[] = [];
   for (const variant of ["classic", "shapes"] as const) {
     for (let seed = 1; seed <= 6; seed++) {
       const puzzle = generate({ rows: 8, cols: 8, difficulty: "hard", variant, seed });
       const game = new Game(puzzle, { hintCooldown: 0 });
-      // Un minuto tra un clic e l'altro; il secondo grado è la spiegazione.
+      // One minute between one click and the next; the second step is the explanation.
       for (let k = 0, now = 0; k < 30; k++, now += 60_000) {
         const hint = game.hint(now);
         if (!hint) break;
@@ -91,13 +91,13 @@ describe("explainFrames su partite vere", () => {
       expect(frames).toHaveLength(expected);
       let k = 0;
       for (const discard of reason.discards) {
-        // La forma provata, da sola.
+        // The tried shape, alone.
         expect(frames[k]!.text).toMatch(/Proviamo .+ qui, nel tratteggio\.$/);
         expect(frames[k]!.ghost?.rect).toEqual(discard.rect);
         expect(frames[k]!.chain).toHaveLength(0);
         expect(frames[k]!.problems).toHaveLength(0);
         k++;
-        // Un pezzo obbligato per passo; i pezzi si accumulano.
+        // One forced piece per step; the pieces accumulate.
         discard.forced.forEach((f, n) => {
           expect(frames[k]!.text).toMatch(/Allora /);
           expect(frames[k]!.chain).toHaveLength(n + 1);
@@ -105,7 +105,7 @@ describe("explainFrames su partite vere", () => {
           expect(frames[k]!.problems).toHaveLength(0);
           k++;
         });
-        // Il problema, con tutta la catena ancora visibile.
+        // The problem, with the whole chain still visible.
         expect(frames[k]!.text).toMatch(/Ma così /);
         expect(frames[k]!.chain).toHaveLength(discard.forced.length);
         expect(frames[k]!.problems).toHaveLength(1);

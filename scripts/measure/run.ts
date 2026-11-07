@@ -1,12 +1,12 @@
 /**
- * Misura del generatore e dei suggerimenti, per variante: per ogni griglia e livello genera
- * SEEDS puzzle con le stesse opzioni del gioco (maxCandidates 10 000, TIME_LIMITS) e su
- * ognuno simula una partita fatta solo di suggerimenti, dalla griglia vuota alla fine,
- * contando i "Nessuna deduzione semplice". Una riga JSON per puzzle in measurements/.
+ * Measures the generator and the hints, per variant: for each grid and level it generates SEEDS
+ * puzzles with the same options as the game (maxCandidates 10 000, TIME_LIMITS) and on each one
+ * simulates a game made only of hints, from the empty grid to the end, counting the "Nessuna
+ * deduzione semplice". One JSON line per puzzle in measurements/.
  *
- * Variabili d'ambiente: SEEDS (10), ONLY ("15x15:hard": una sola griglia e livello),
- * VARIANT (una sola variante). Le soglie in CLAUDE.md vengono da queste misure: se si
- * cambiano generatore, valutatore o suggerimenti, rimisurare (npm run measure).
+ * Environment variables: SEEDS (10), ONLY ("15x15:hard": a single grid and level), VARIANT (a
+ * single variant). The thresholds in CLAUDE.md come from these measurements: if the generator,
+ * grader or hints change, measure again (npm run measure).
  */
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { generate } from "../../src/generator";
@@ -14,7 +14,7 @@ import { nextDeduction } from "../../src/grader";
 import { availableDifficulties, type Rect, sameRect, TIME_LIMITS, type Variant } from "../../src/types";
 import { OUT_DIR, type Row } from "./rows";
 
-/** Le griglie misurate: quadrate piccole e grandi, e una rettangolare. */
+/** The measured grids: small and large squares, and a rectangular one. */
 const SIZES = [
   { rows: 7, cols: 7 },
   { rows: 8, cols: 8 },
@@ -23,9 +23,9 @@ const SIZES = [
   { rows: 8, cols: 12 },
 ];
 
-/** Tetto per ogni deduzione nella simulazione: qui conta che esista (il gioco al clic ne ha 300 ms). */
+/** Cap for each deduction in the simulation: here what matters is that it exists (the game has 300 ms on click). */
 const CALL_CAP = 4000;
-/** Il tetto del gioco: le deduzioni più lente lì ripiegano. */
+/** The game's cap: slower deductions fall back there. */
 const GAME_CALL_MS = 300;
 
 export function measure(variant: Variant): void {

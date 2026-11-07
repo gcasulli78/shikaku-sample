@@ -1,11 +1,11 @@
 /**
- * Riepilogo delle misure, stampato alla fine di npm run measure (measurements/*.jsonl, vedi run.ts): una riga per variante, griglia
- * e livello chiesto, poi per livello ottenuto. Le colonne:
- * - liv.ok: puzzle del livello chiesto (gli altri sono quelli "vicini" allo scadere del tempo);
- * - risolti: quanti si finiscono con le sole deduzioni dei suggerimenti (nessun ripiego);
- * - ripieghi: "Nessuna deduzione semplice" in media a partita;
- * - >300ms: deduzioni che nel gioco supererebbero il tetto e ripiegherebbero;
- * - gen: tempo medio di generazione in ms.
+ * Summary of the measurements, printed at the end of npm run measure (measurements/*.jsonl, see run.ts): one row per variant,
+ * grid and requested level, then per obtained level. The columns:
+ * - liv.ok: puzzles of the requested level (the others are the "nearest" ones when time runs out);
+ * - risolti: how many can be finished with the hint deductions alone (no fallback);
+ * - ripieghi: average "Nessuna deduzione semplice" per game;
+ * - >300ms: deductions that in the game would exceed the cap and fall back;
+ * - gen: average generation time in ms.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { OUT_DIR, type Row } from "./rows";
@@ -13,7 +13,7 @@ import { OUT_DIR, type Row } from "./rows";
 const VARIANTS = ["classic", "shapes", "blocked"] as const;
 const LEVELS = ["easy", "medium", "hard", "expert", "master"];
 
-/** Alla fine di tutte le misure (globalSetup in vitest.config.ts): stampa il riepilogo. */
+/** At the end of all measurements (globalSetup in vitest.config.ts): prints the summary. */
 export function teardown(): void {
   const rows: Row[] = VARIANTS.filter((v) => existsSync(`${OUT_DIR}/${v}.jsonl`)).flatMap((v) =>
     readFileSync(`${OUT_DIR}/${v}.jsonl`, "utf8")

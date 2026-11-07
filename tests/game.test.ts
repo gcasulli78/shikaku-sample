@@ -4,7 +4,7 @@ import { generate } from "../src/generator";
 import type { Puzzle } from "../src/types";
 
 //  2 . .
-//  . . 4    soluzione: il 2 verticale a sinistra, il 4 è il 2×2 a destra
+//  . . 4    solution: the 2 vertical on the left, the 4 is the 2×2 on the right
 const puzzle: Puzzle = {
   rows: 2,
   cols: 3,
@@ -22,9 +22,9 @@ describe("Game", () => {
   it("valida i rettangoli", () => {
     const game = new Game(puzzle);
     expect(game.isValid({ r: 0, c: 0, h: 2, w: 1 })).toBe(true);
-    expect(game.isValid({ r: 0, c: 0, h: 1, w: 3 })).toBe(false); // area sbagliata
-    expect(game.isValid({ r: 0, c: 1, h: 1, w: 2 })).toBe(false); // nessun numero
-    expect(game.isValid({ r: 0, c: 0, h: 2, w: 3 })).toBe(false); // due numeri
+    expect(game.isValid({ r: 0, c: 0, h: 1, w: 3 })).toBe(false); // wrong area
+    expect(game.isValid({ r: 0, c: 1, h: 1, w: 2 })).toBe(false); // no number
+    expect(game.isValid({ r: 0, c: 0, h: 2, w: 3 })).toBe(false); // two numbers
   });
 
   it("rifiuta i rettangoli sovrapposti senza toccare quelli esistenti", () => {
@@ -32,9 +32,9 @@ describe("Game", () => {
     expect(game.place({ r: 0, c: 0, h: 1, w: 2 })).toBe(true);
     expect(game.canPlace({ r: 0, c: 0, h: 2, w: 1 })).toBe(false);
     expect(game.place({ r: 0, c: 0, h: 2, w: 1 })).toBe(false);
-    expect(game.place({ r: 0, c: 0, h: 1, w: 2 })).toBe(false); // anche identico
+    expect(game.place({ r: 0, c: 0, h: 1, w: 2 })).toBe(false); // even identical
     expect(game.placed).toEqual([{ r: 0, c: 0, h: 1, w: 2 }]);
-    game.undo(); // il rifiuto non entra nella cronologia
+    game.undo(); // the rejection doesn't enter the history
     expect(game.placed).toHaveLength(0);
     expect(game.canUndo).toBe(false);
   });
@@ -50,8 +50,8 @@ describe("Game", () => {
       solution: [],
     };
     const game = new Game(ones);
-    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // c'è il numero 1
-    expect(game.intent({ r: 0, c: 1, h: 1, w: 1 })).toBe("none"); // casella libera qualsiasi
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // there's the number 1
+    expect(game.intent({ r: 0, c: 1, h: 1, w: 1 })).toBe("none"); // any free cell
     game.place({ r: 0, c: 1, h: 1, w: 2 });
     expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("remove");
     expect(game.intent({ r: 0, c: 0, h: 1, w: 2 })).toBe("blocked");
@@ -60,14 +60,14 @@ describe("Game", () => {
   it("status: valido, sicuramente sbagliato o ancora aperto", () => {
     const game = new Game(puzzle);
     expect(game.status({ r: 0, c: 0, h: 2, w: 1 })).toBe("valid");
-    expect(game.status({ r: 0, c: 0, h: 2, w: 3 })).toBe("bad"); // due numeri
-    expect(game.status({ r: 0, c: 0, h: 1, w: 3 })).toBe("bad"); // più grande del 2
-    expect(game.status({ r: 0, c: 0, h: 1, w: 1 })).toBe("open"); // più piccolo: si può allargare
-    expect(game.status({ r: 0, c: 1, h: 1, w: 1 })).toBe("open"); // nessun numero
+    expect(game.status({ r: 0, c: 0, h: 2, w: 3 })).toBe("bad"); // two numbers
+    expect(game.status({ r: 0, c: 0, h: 1, w: 3 })).toBe("bad"); // larger than the 2
+    expect(game.status({ r: 0, c: 0, h: 1, w: 1 })).toBe("open"); // smaller: it can still grow
+    expect(game.status({ r: 0, c: 1, h: 1, w: 1 })).toBe("open"); // no number
   });
 
   it("Forme: validità, errori certi e tap secondo forma e area dell'indizio", () => {
-    //  □ . ?      □ = quadrato di area qualsiasi, ▭4 = rettangolo non quadrato di 4
+    //  □ . ?      □ = square of any area, ▭4 = non-square rectangle of 4
     //  ▭ . .
     const shapes: Puzzle = {
       rows: 2,
@@ -81,25 +81,25 @@ describe("Game", () => {
     };
     const game = new Game(shapes);
     expect(game.isValid({ r: 0, c: 0, h: 1, w: 1 })).toBe(true); // □ 1×1
-    expect(game.isValid({ r: 0, c: 0, h: 1, w: 2 })).toBe(false); // □ ma non quadrato
-    expect(game.status({ r: 0, c: 0, h: 1, w: 2 })).toBe("open"); // può ancora diventare 2×2
-    expect(game.isValid({ r: 1, c: 0, h: 1, w: 3 })).toBe(false); // area 3, non 4
+    expect(game.isValid({ r: 0, c: 0, h: 1, w: 2 })).toBe(false); // □ but not square
+    expect(game.status({ r: 0, c: 0, h: 1, w: 2 })).toBe("open"); // can still become 2×2
+    expect(game.isValid({ r: 1, c: 0, h: 1, w: 3 })).toBe(false); // area 3, not 4
     expect(game.status({ r: 1, c: 0, h: 1, w: 3 })).toBe("open");
-    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("bad"); // due indizi
-    expect(game.isValid({ r: 0, c: 1, h: 2, w: 2 })).toBe(true); // ? accetta tutto
-    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // □ ammette 1×1
-    expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("place"); // ? ammette 1×1
-    expect(game.intent({ r: 1, c: 0, h: 1, w: 1 })).toBe("none"); // ▭4 no
+    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("bad"); // two clues
+    expect(game.isValid({ r: 0, c: 1, h: 2, w: 2 })).toBe(true); // ? accepts everything
+    expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("place"); // □ allows 1×1
+    expect(game.intent({ r: 0, c: 2, h: 1, w: 1 })).toBe("place"); // ? allows 1×1
+    expect(game.intent({ r: 1, c: 0, h: 1, w: 1 })).toBe("none"); // ▭4 doesn't
   });
 
   it("Forme: orientamento sbagliato è un errore certo, e niente 1×1", () => {
-    //  ▭6 orizzontale nell'angolo di una griglia 3×6
+    //  ▭6 horizontal in the corner of a 3×6 grid
     const wide6: Puzzle = { rows: 3, cols: 6, clues: [{ r: 0, c: 0, n: 6, shape: "wide" }], solution: [] };
     const game = new Game(wide6);
     expect(game.status({ r: 0, c: 0, h: 2, w: 3 })).toBe("valid");
     expect(game.status({ r: 0, c: 0, h: 1, w: 6 })).toBe("valid");
-    expect(game.status({ r: 0, c: 0, h: 3, w: 2 })).toBe("bad"); // verticale
-    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("open"); // può ancora allargarsi
+    expect(game.status({ r: 0, c: 0, h: 3, w: 2 })).toBe("bad"); // vertical
+    expect(game.status({ r: 0, c: 0, h: 2, w: 2 })).toBe("open"); // can still grow
     expect(game.intent({ r: 0, c: 0, h: 1, w: 1 })).toBe("none");
     const tall: Puzzle = { rows: 3, cols: 3, clues: [{ r: 0, c: 0, shape: "tall" }], solution: [] };
     expect(new Game(tall).isValid({ r: 0, c: 0, h: 3, w: 1 })).toBe(true);
@@ -137,9 +137,9 @@ describe("Game", () => {
 
   it("il suggerimento toglie prima tutti i rettangoli sbagliati, senza posarne, e spiega il primo", () => {
     const game = new Game(puzzle);
-    game.place({ r: 0, c: 0, h: 2, w: 1 }); // giusto
-    game.place({ r: 0, c: 1, h: 1, w: 1 }); // sbagliato
-    game.place({ r: 1, c: 1, h: 1, w: 2 }); // sbagliato
+    game.place({ r: 0, c: 0, h: 2, w: 1 }); // correct
+    game.place({ r: 0, c: 1, h: 1, w: 1 }); // wrong
+    game.place({ r: 1, c: 1, h: 1, w: 2 }); // wrong
     expect(game.hint(0)).toEqual({
       removed: [
         { r: 0, c: 1, h: 1, w: 1 },
@@ -149,14 +149,14 @@ describe("Game", () => {
     });
     expect(game.placed).toEqual([{ r: 0, c: 0, h: 2, w: 1 }]);
     expect(game.hintsUsed).toBe(1);
-    game.undo(); // Annulla rimette i rettangoli tolti dal suggerimento
+    game.undo(); // Undo puts back the rectangles removed by the hint
     expect(game.placed).toHaveLength(3);
   });
 
   describe("rettangolo sbagliato senza motivo visibile: il suggerimento mostra il pezzo giusto", () => {
     //  2 . . .
-    //  . 6 . .     il 4 in colonna non toglie subito spazio a nessuno: sbagliato solo
-    //  2 . . 4     seguendo altri passi. Soluzione del 4: il 2×2 in basso a destra.
+    //  . 6 . .     the 4 in a column doesn't immediately take room from anyone: wrong only
+    //  2 . . 4     by following other steps. Solution of the 4: the 2×2 at the bottom right.
     //  2 . . .
     const misplaced: Puzzle = {
       rows: 4,
@@ -199,8 +199,8 @@ describe("Game", () => {
       const game = new Game(misplaced);
       game.hint(0);
       game.hint(0);
-      expect(game.hint(0)).toMatchObject({ placed: {} }); // un pezzo suggerito: parte l'attesa
-      game.undo(); // l'attesa resta, la griglia torna vuota
+      expect(game.hint(0)).toMatchObject({ placed: {} }); // a hinted piece: the cooldown starts
+      game.undo(); // the cooldown stays, the grid goes back to empty
       game.place(column);
       expect(game.hint(1000)).toEqual({ removed: [column], wrong: { rect: column, why } });
       expect(game.hintStage).toBe(2);
@@ -214,9 +214,9 @@ describe("Game", () => {
     expect(game.whyWrong({ r: 0, c: 1, h: 1, w: 1 })).toEqual({ kind: "empty" });
     expect(game.whyWrong({ r: 0, c: 0, h: 2, w: 3 })).toEqual({ kind: "many", count: 2 });
     expect(game.whyWrong({ r: 0, c: 0, h: 1, w: 3 })).toEqual({ kind: "area", clue: { r: 0, c: 0, n: 2 } });
-    // Il 2 in orizzontale rispetta l'indizio, ma il 4 non ha più spazio.
+    // The horizontal 2 matches the clue, but the 4 has no room left.
     expect(game.whyWrong({ r: 0, c: 0, h: 1, w: 2 })).toEqual({ kind: "starved", clue: { r: 1, c: 2, n: 4 } });
-    //  ? . 1     il ? in un 1×1 lascia scoperta la casella in mezzo
+    //  ? . 1     the ? in a 1×1 leaves the middle cell uncovered
     const open = new Game({
       rows: 1,
       cols: 3,
@@ -236,10 +236,10 @@ describe("Game", () => {
 
   it("senza errori il suggerimento procede a gradi: indizio, motivo, pezzo", () => {
     const game = new Game(puzzle);
-    game.place({ r: 0, c: 0, h: 1, w: 3 }); // sbagliato, copre entrambe le soluzioni
+    game.place({ r: 0, c: 0, h: 1, w: 3 }); // wrong, covers both solutions
     expect(game.hint(0)).toMatchObject({ removed: [{ r: 0, c: 0, h: 1, w: 3 }] });
     expect(game.placed).toHaveLength(0);
-    // Prima il 4, anche se nella soluzione viene dopo: in 2×3 può essere solo il 2×2.
+    // The 4 first, even if it comes later in the solution: in 2×3 it can only be the 2×2.
     const reason = { kind: "single", clue: { r: 1, c: 2, n: 4 }, discards: [] };
     expect(game.hint(0)).toEqual({ focus: reason });
     expect(game.hintStage).toBe(1);
@@ -248,8 +248,8 @@ describe("Game", () => {
     expect(game.placed).toHaveLength(0);
     expect(game.hint(0)).toEqual({ placed: { r: 0, c: 1, h: 2, w: 2 }, reason });
     expect(game.hintStage).toBe(0);
-    expect(game.hintsUsed).toBe(2); // l'errore tolto e il pezzo posato
-    // Una mossa azzera i gradi.
+    expect(game.hintsUsed).toBe(2); // the error removed and the piece placed
+    // A move resets the steps.
     expect(game.hint(0)).toMatchObject({ focus: { clue: { r: 0, c: 0, n: 2 } } });
     game.undo();
     expect(game.hintStage).toBe(0);
@@ -265,11 +265,11 @@ describe("Game", () => {
     expect(game.hint(3000)).toMatchObject({ explain: {} });
     expect(game.hint(10_000)).toEqual({ wait: 6000 });
     expect(game.placed).toHaveLength(1);
-    // L'attesa sopravvive al salvataggio.
+    // The cooldown survives saving.
     const resumed = Game.restore(puzzle, JSON.parse(JSON.stringify(game.snapshot())));
     expect(resumed.cooldown(10_000)).toBe(6000);
     expect(game.hint(16_000)).toMatchObject({ placed: { r: 0, c: 0, h: 2, w: 1 } });
-    // Senza attesa (tutorial).
+    // Without cooldown (tutorial).
     const tutorial = new Game(puzzle, { hintCooldown: 0 });
     for (let i = 0; i < 6; i++) tutorial.hint(0);
     expect(tutorial.isSolved()).toBe(true);
@@ -337,7 +337,7 @@ describe("Game", () => {
     expect(game.isSolved()).toBe(false);
     game.place({ r: 0, c: 0, h: 2, w: 1 });
     expect(game.isSolved()).toBe(false);
-    game.place({ r: 0, c: 1, h: 1, w: 2 }); // copre parte, area 2 senza numero
+    game.place({ r: 0, c: 1, h: 1, w: 2 }); // covers part, area 2 without a number
     game.place({ r: 1, c: 1, h: 1, w: 2 });
     expect(game.isSolved()).toBe(false);
     game.remove({ r: 0, c: 1, h: 1, w: 2 });
@@ -349,7 +349,7 @@ describe("Game", () => {
   it("risolvere a suon di suggerimenti vince sempre, ogni volta per deduzione", () => {
     for (const variant of ["classic", "shapes"] as const) {
       const game = new Game(generate({ rows: 10, cols: 10, seed: 7, variant }));
-      // Un minuto tra un clic e l'altro: l'attesa tra due pezzi non scatta mai.
+      // One minute between one click and the next: the cooldown between two pieces never kicks in.
       for (let now = 0, hint = game.hint(now); hint; now += 60_000, hint = game.hint(now)) {
         expect("wait" in hint, variant).toBe(false);
         expect("placed" in hint && !("removed" in hint) ? hint.reason : true, variant).toBeTruthy();
@@ -359,7 +359,7 @@ describe("Game", () => {
   });
 
   it("senza deduzioni possibili il suggerimento posa un pezzo della soluzione, senza motivo", () => {
-    //  2 .      ambiguo: il 2 in orizzontale o in verticale
+    //  2 .      ambiguous: the 2 horizontal or vertical
     //  . 2
     const ambiguous: Puzzle = {
       rows: 2,
@@ -380,10 +380,10 @@ describe("Game", () => {
     it("senza gradi né attesa: toglie gli errori o posa un pezzo, al massimo hintLimit volte", () => {
       const game = new Game(puzzle, { hintLimit: 2, quiet: true });
       expect(game.hintsLeft).toBe(2);
-      game.place({ r: 0, c: 1, h: 1, w: 2 }); // sbagliato
+      game.place({ r: 0, c: 1, h: 1, w: 2 }); // wrong
       expect(game.hint(0)).toEqual({ quiet: true, removed: [{ r: 0, c: 1, h: 1, w: 2 }], left: 1 });
       expect(game.placed).toHaveLength(0);
-      // Subito un pezzo, senza indizio da guardare né motivo, e senza attesa.
+      // A piece right away, with no clue to look at or reason, and no cooldown.
       const second = game.hint(0);
       expect(second).toMatchObject({ quiet: true, removed: [], left: 0 });
       expect(game.placed).toHaveLength(1);
@@ -450,7 +450,7 @@ describe("Timer", () => {
     timer.reset();
     expect(timer.elapsed()).toBe(0);
     expect(timer.running).toBe(false);
-    timer.reset(42_000); // partita ripresa
+    timer.reset(42_000); // resumed game
     expect(timer.elapsed()).toBe(42_000);
     timer.start();
     now = 15000;

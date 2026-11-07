@@ -4,7 +4,7 @@ import { type Deduction, type DeductionKind, grade, nextDeduction } from "../src
 import { candidatesFor, clueIndexMap, type SolveInput } from "../src/solver";
 import { availableDifficulties, type Clue, contains, type Difficulty, type Rect, sameRect, type Variant } from "../src/types";
 
-/** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
+/** Hand-written grid: digits = numbers, "." = empty cell. */
 function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
   const clues: Clue[] = [];
   lines.forEach((line, r) => {
@@ -17,7 +17,7 @@ function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
 
 describe("grade", () => {
   it("forme uniche → Facile", () => {
-    // Il 2 non può scendere (c'è il 4), quindi va a destra; poi il 4 è obbligato.
+    // The 2 can't go down (the 4 is there), so it goes right; then the 4 is forced.
     const g = grade(parse(["2.", "4.", ".."]));
     expect(g.solved).toBe(true);
     expect(g.difficulty).toBe("easy");
@@ -70,16 +70,16 @@ describe("grade", () => {
   }, 120_000);
 });
 
-/** Le caselle di un rettangolo (r * cols + c). */
+/** The cells of a rectangle (r * cols + c). */
 function cellsOf(rect: Rect, cols: number): number[] {
   return Array.from({ length: rect.h * rect.w }, (_, k) => (rect.r + Math.floor(k / rect.w)) * cols + rect.c + (k % rect.w));
 }
 
 /**
- * La spiegazione ricontrollata da capo con le sole forme possibili (candidatesFor), senza
- * il valutatore: le forme scartate sono tutte le altre dell'indizio, ogni pezzo della catena
- * è davvero obbligato (vedi Discard), e il problema c'è davvero. È quello che
- * il giocatore deve poter verificare guardando la griglia. undefined se torna tutto.
+ * The explanation re-checked from scratch with only the possible shapes (candidatesFor), without
+ * the grader: the discarded shapes are all the other ones of the clue, every piece of the chain is
+ * really forced (see Discard), and the problem really exists. That's what the player must be able
+ * to verify by looking at the grid. undefined if everything checks out.
  */
 function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deduction): string | undefined {
   const clueAt = clueIndexMap(input);
@@ -105,7 +105,7 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
     for (const f of dis.forced) {
       const now = view(pieces);
       if (now.done.has(f.clue)) return "catena su un indizio già posato";
-      // Obbligato: una forma sola, o l'unico ad arrivare alla casella f.cell, in un modo solo.
+      // Forced: a single shape, or the only one reaching cell f.cell, in a single way.
       const ways = f.cell === undefined ? now.avail(f.clue) : now.avail(f.clue).filter((cand) => cand.cells.includes(f.cell!));
       if (
         f.cell !== undefined &&
@@ -139,7 +139,7 @@ function explanationHolds(input: SolveInput, given: readonly Rect[], d: Deductio
 
 describe("nextDeduction", () => {
   it("forma unica", () => {
-    // Il 2 non può scendere (c'è il 4): ha una sola forma già all'inizio.
+    // The 2 can't go down (the 4 is there): it has a single shape right from the start.
     expect(nextDeduction(parse(["2.", "4.", ".."]), [])).toEqual({
       clue: 0,
       rect: { r: 0, c: 0, h: 1, w: 2 },
@@ -160,7 +160,7 @@ describe("nextDeduction", () => {
   });
 
   it("casella che raggiunge un solo indizio: basta mostrare quella", () => {
-    // La seconda casella in alto la raggiunge solo il 6, e solo con il 2×3 in alto a destra.
+    // The second cell at the top is reached only by the 6, and only with the 2×3 at the top right.
     const input = parse(["...6", "2...", ".4.."]);
     const d = nextDeduction(input, [])!;
     expect(d).toMatchObject({ clue: 0, rect: { r: 0, c: 1, h: 2, w: 3 }, kind: "direct", only: 1 });
@@ -168,7 +168,7 @@ describe("nextDeduction", () => {
   });
 
   it("ogni forma scartata con il suo problema", () => {
-    // Il 4 in r1 c1: le altre forme lasciano una casella scoperta o un numero senza spazio.
+    // The 4 at r1 c1: the other shapes leave a cell uncovered or a number without room.
     const input = parse(["...4", ".4..", "..2.", "3..3"]);
     const d = nextDeduction(input, [])!;
     expect(d).toMatchObject({ rect: { r: 1, c: 0, h: 2, w: 2 }, kind: "direct" });
@@ -177,15 +177,15 @@ describe("nextDeduction", () => {
   });
 
   it("preferisce l'indizio vicino all'ultima mossa", () => {
-    // Quattro numeri con una forma sola, due in alto e due in basso: vince il più vicino.
+    // Four numbers with a single shape, two at the top and two at the bottom: the closest wins.
     const input = parse(["2.", "4.", "..", "..", "4.", "2."]);
     expect(nextDeduction(input, [])?.clue).toBe(0);
     expect(nextDeduction(input, [], { r: 5, c: 1, h: 1, w: 1 })?.clue).toBe(3);
   });
 
   it("i puzzle segnalati: spiegazioni che si verificano sulla griglia", () => {
-    // 8×8 Forme, 9 già posato. Prima: "le caselle che il 7 copre comunque tolgono spazio al
-    // 2", ma il 7 (1×7 o 7×1) era verticale solo per un passo non detto.
+    // 8×8 Shapes, 9 already placed. Before: "le caselle che il 7 copre comunque tolgono spazio al
+    // 2", but the 7 (1×7 or 7×1) was vertical only because of an unstated step.
     const first = {
       rows: 8,
       cols: 8,
@@ -202,8 +202,8 @@ describe("nextDeduction", () => {
         { r: 7, c: 3, n: 6, shape: "oblong" as const },
       ],
     };
-    // 8×8 Forme, 15 già posato. Prima: "solo il 6 non quadrato può coprire la casella" r0 c0,
-    // ma anche l'altro 6 la copriva, con una striscia 6×1 tolta da un passo non detto.
+    // 8×8 Shapes, 15 already placed. Before: "solo il 6 non quadrato può coprire la casella" r0 c0,
+    // but the other 6 covered it too, with a 6×1 strip ruled out by an unstated step.
     const second = {
       rows: 8,
       cols: 8,
@@ -220,15 +220,15 @@ describe("nextDeduction", () => {
         { r: 7, c: 7, n: 2, shape: "oblong" as const },
       ],
     };
-    // Il 2 in orizzontale? Allora il 7 potrebbe stare solo in orizzontale, e il 12 non
-    // quadrato resterebbe senza spazio: il passo sul 7 ora si vede, disegnato.
+    // The 2 horizontal? Then the 7 could only be horizontal, and the non-square 12 would be left
+    // without room: the step on the 7 is now visible, drawn.
     const given = [{ r: 1, c: 0, h: 3, w: 3 }];
     const d = nextDeduction(first, given)!;
     expect(d).toMatchObject({ clue: 8, rect: { r: 6, c: 6, h: 2, w: 1 }, kind: "chain" });
     expect(d.discards[0]!.forced).toEqual([{ clue: 4, rect: { r: 4, c: 1, h: 1, w: 7 } }]);
     expect(explanationHolds(first, given, d)).toBeUndefined();
-    // Qui nessun numero si deduce con catene di pezzi obbligati (neanche lunghe 8): il
-    // suggerimento posa un pezzo invece di una frase che non si verifica.
+    // Here no number can be deduced with chains of forced pieces (not even 8 long): the hint places
+    // a piece instead of a sentence that can't be verified.
     expect(nextDeduction(second, [{ r: 0, c: 3, h: 3, w: 5 }])).toBeUndefined();
   });
 
@@ -250,7 +250,7 @@ describe("nextDeduction", () => {
           const d = nextDeduction(p, given, given[given.length - 1]);
           const label = `${difficulty} ${variant} seed ${seed}`;
           if (!d) {
-            // Nessuna deduzione che si veda: il suggerimento posa un pezzo della soluzione.
+            // No visible deduction: the hint places a piece of the solution.
             given.push(p.solution.find((sol) => !given.some((g) => sameRect(g, sol)))!);
             continue;
           }

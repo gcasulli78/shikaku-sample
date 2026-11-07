@@ -4,29 +4,29 @@ export interface SolveInput {
   rows: number;
   cols: number;
   clues: Clue[];
-  /** Caselle nere (r * cols + c): nessun rettangolo le copre. */
+  /** Black cells (r * cols + c): no rectangle covers them. */
   blocked?: number[];
 }
 
-/** Nella mappa degli indizi: casella nera (gli indici ≥ 0 sono indizi, -1 casella libera). */
+/** In the clue map: black cell (indices ≥ 0 are clues, -1 a free cell). */
 export const BLOCKED = -2;
 
 export interface SolveResult {
-  /** Soluzioni trovate, fermandosi a `limit`. */
+  /** Solutions found, stopping at `limit`. */
   count: number;
-  /** Le soluzioni trovate, una per indizio nello stesso ordine di `clues`. */
+  /** The solutions found, one per clue in the same order as `clues`. */
   solutions: Rect[][];
-  /** Ricerca interrotta per budget (passi o tempo) esaurito: count non è affidabile. */
+  /** Search interrupted because the budget (steps or time) ran out: count is not reliable. */
   aborted: boolean;
 }
 
 export interface Candidate {
   rect: Rect;
-  /** Indici di cella (r * cols + c). */
+  /** Cell indices (r * cols + c). */
   cells: number[];
 }
 
-/** Indice di ogni cella → numero che contiene (-1 se vuota, BLOCKED se nera). */
+/** Index of each cell → number it contains (-1 if empty, BLOCKED if black). */
 export function clueIndexMap(input: SolveInput): Int32Array {
   const clueAt = new Int32Array(input.rows * input.cols).fill(-1);
   for (const idx of input.blocked ?? []) clueAt[idx] = BLOCKED;
@@ -36,7 +36,7 @@ export function clueIndexMap(input: SolveInput): Int32Array {
   return clueAt;
 }
 
-/** Misure (h, w) ammesse dall'indizio: con l'area nota solo i divisori, altrimenti tutte. */
+/** Sizes (h, w) allowed by the clue: with a known area only the divisors, otherwise all of them. */
 function sizesFor(clue: Clue, rows: number, cols: number): [number, number][] {
   const sizes: [number, number][] = [];
   for (let h = 1; h <= rows; h++) {
@@ -47,7 +47,7 @@ function sizesFor(clue: Clue, rows: number, cols: number): [number, number][] {
   return sizes;
 }
 
-/** Tutti i rettangoli che rispettano l'indizio, lo contengono e non contengono altri indizi né caselle nere. */
+/** All the rectangles that match the clue, contain it and contain no other clues or black cells. */
 export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int32Array): Candidate[] {
   const { rows, cols, clues } = input;
   const clue = clues[clueIndex]!;
@@ -76,13 +76,12 @@ export function candidatesFor(input: SolveInput, clueIndex: number, clueAt: Int3
 }
 
 /**
- * Conta le soluzioni con backtracking, fermandosi a `limit`.
- * Euristiche: a ogni passo si scartano i candidati che toccano celle occupate,
- * si fallisce se una cella libera non è coperta da nessun candidato, e si ramifica
- * sulla cella coperta da meno candidati (le celle con un solo candidato sono forzate).
- * `maxNodes` limita i passi di ricerca: con molti indizi ad area aperta, in rari casi
- * la ricerca esplode (567 mila passi, 30 s su un 15×15 Forme). Un passo però può costare
- * molto (200 mila passi in 36 s su un link con 12 "?"): `maxMs` limita anche il tempo.
+ * Counts the solutions with backtracking, stopping at `limit`. Heuristics: at each step candidates
+ * touching occupied cells are discarded, it fails if a free cell is covered by no candidate, and it
+ * branches on the cell covered by the fewest candidates (cells with a single candidate are forced).
+ * `maxNodes` limits the search steps: with many open-area clues, in rare cases the search explodes
+ * (567 thousand steps, 30 s on a 15×15 Shapes). One step, however, can be very costly (200 thousand
+ * steps in 36 s on a link with 12 "?"): `maxMs` limits the time too.
  */
 export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs = Infinity): SolveResult {
   const { rows, cols, clues } = input;
@@ -92,7 +91,7 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs =
   let nodes = 0;
   const deadline = performance.now() + maxMs;
 
-  // Con tutte le aree note la somma deve tornare esatta; con aree aperte non può superare la griglia.
+  // With all areas known the sum must match exactly; with open areas it can't exceed the grid.
   const known = clues.filter((cl) => cl.n !== undefined);
   const sum = known.reduce((s, cl) => s + cl.n!, 0);
   const free = total - blocked.length;
@@ -108,7 +107,7 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs =
   }
 
   const candidates = clues.map((_, i) => candidatesFor(input, i, clueAt));
-  // Le caselle nere contano come già coperte.
+  // Black cells count as already covered.
   const occupied = new Uint8Array(total);
   for (const idx of blocked) occupied[idx] = 1;
   const placed = new Uint8Array(clues.length);
@@ -135,20 +134,20 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs =
   };
 
   const search = (): boolean => {
-    // L'orologio si guarda ogni 256 passi.
+    // The clock is checked every 256 steps.
     if (++nodes > maxNodes || ((nodes & 255) === 0 && performance.now() > deadline)) {
       result.aborted = true;
       return true;
     }
     if (remaining === 0) {
-      // Con aree aperte tutti gli indizi possono essere posati lasciando caselle scoperte.
+      // With open areas all clues can be placed while leaving cells uncovered.
       if (covered < total) return false;
       result.count++;
       result.solutions.push(chosen.map((r) => ({ ...r! })));
       return result.count >= limit;
     }
 
-    // Candidati ancora posabili per ogni indizio non piazzato, e copertura delle celle.
+    // Candidates still placeable for each unplaced clue, and cell coverage.
     coverCount.fill(0);
     const valid: Candidate[][] = new Array(clues.length);
     for (let i = 0; i < clues.length; i++) {
@@ -159,7 +158,7 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs =
       for (const cand of list) for (const idx of cand.cells) coverCount[idx]!++;
     }
 
-    // Cella libera coperta da meno candidati; indizio con meno candidati.
+    // Free cell covered by the fewest candidates; clue with the fewest candidates.
     let bestCell = -1;
     let bestCellCount = Infinity;
     for (let idx = 0; idx < total; idx++) {
@@ -182,7 +181,7 @@ export function solve(input: SolveInput, limit = 2, maxNodes = Infinity, maxMs =
     }
 
     if (bestCellCount < bestClueCount) {
-      // Ramifica su chi copre la cella più vincolata.
+      // Branches on what covers the most constrained cell.
       for (let i = 0; i < clues.length; i++) {
         const list = valid[i];
         if (!list) continue;

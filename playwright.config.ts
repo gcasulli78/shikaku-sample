@@ -1,12 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-/** In CI (GitHub Actions) niente server già avviato da riusare e un tentativo in più. */
+/** In CI (GitHub Actions) no already-running server to reuse, and one extra retry. */
 const CI = !!(globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.CI;
 
 /**
- * Test dell'interfaccia (e2e/): il file costruito servito come su GitHub Pages, in Chromium
- * (Chrome, Edge), WebKit (il motore di Safari) e WebKit con schermo e tocco da iPhone. I test
- * della logica restano in tests/ con Vitest.
+ * UI tests (e2e/): the built file served as on GitHub Pages, in Chromium (Chrome, Edge), WebKit
+ * (Safari's engine) and WebKit with an iPhone screen and touch. The logic tests stay in tests/ with
+ * Vitest.
  */
 export default defineConfig({
   testDir: "e2e",
@@ -23,7 +23,7 @@ export default defineConfig({
     { name: "iphone", use: { ...devices["iPhone 13"] } },
   ],
   webServer: {
-    // La build prima di servire: si prova sempre il file che verrà pubblicato.
+    // Build before serving: the file that will be published is always the one tested.
     command: "npm run build && npx vite preview --port 4173 --strictPort",
     url: "http://localhost:4173/",
     reuseExistingServer: !CI,

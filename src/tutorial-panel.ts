@@ -1,14 +1,14 @@
 /**
- * Il tutorial "Come si gioca": griglie scritte a mano (tutorial.ts), una per regola, giocate
- * sulla griglia vera. Durante il tutorial niente salvataggio, record né riquadro di vittoria
- * (ui.ts lo chiede con active()); uscendo si riprende la partita salvata, o una nuova.
+ * The "Come si gioca" tutorial: hand-written grids (tutorial.ts), one per rule, played on the real
+ * grid. During the tutorial no saving, records or win panel (ui.ts asks with active()); on exit the
+ * saved game is resumed, or a new one starts.
  */
 import type { GenerateResult } from "./generator";
 import { completePuzzle } from "./share";
 import { TUTORIAL } from "./tutorial";
 import type { Variant } from "./types";
 
-/** Gli elementi del pannello e quello che il tutorial usa della partita (vedi ui.ts). */
+/** The panel's elements and what the tutorial uses from the game (see ui.ts). */
 export interface TutorialContext {
   button: HTMLButtonElement;
   panel: HTMLElement;
@@ -19,20 +19,20 @@ export interface TutorialContext {
   prev: HTMLButtonElement;
   next: HTMLButtonElement;
   exit: HTMLButtonElement;
-  /** Mette in gioco una griglia del tutorial, con la sua riga di stato. */
+  /** Puts a tutorial grid in play, with its status line. */
   start(puzzle: GenerateResult, variant: Variant, options: { status: string; hintCooldown: number }): void;
-  /** Salva la partita vera (col tempo trascorso) prima di entrare, se ce n'è una. */
+  /** Saves the real game (with the elapsed time) before entering, if there is one. */
   saveGame(): void;
-  /** All'uscita: la partita salvata, altrimenti una nuova. */
+  /** On exit: the saved game, otherwise a new one. */
   resumeOrNew(): void;
 }
 
 export interface Tutorial {
-  /** Si sta giocando una griglia del tutorial. */
+  /** A tutorial grid is being played. */
   active(): boolean;
-  /** Chiude il pannello senza toccare la partita in gioco (nuova partita, link). */
+  /** Closes the panel without touching the game in play (new game, link). */
   leave(): void;
-  /** La griglia del tutorial è risolta: lo dice nel pannello. */
+  /** The tutorial grid is solved: says so in the panel. */
   solved(): void;
 }
 
@@ -45,7 +45,7 @@ export function setupTutorial(ctx: TutorialContext): Tutorial {
     const { rows, cols, clues, blocked } = grid;
     ctx.start(completePuzzle({ rows, cols, clues, blocked })!, grid.variant, {
       status: `Come si gioca · ${index + 1} di ${TUTORIAL.length}`,
-      // Nel tutorial si impara: nessuna attesa tra un pezzo suggerito e l'altro.
+      // The tutorial is for learning: no cooldown between hinted pieces.
       hintCooldown: 0,
     });
     ctx.stepLabel.textContent = `Passo ${index + 1} di ${TUTORIAL.length}`;
@@ -68,7 +68,7 @@ export function setupTutorial(ctx: TutorialContext): Tutorial {
   };
 
   ctx.button.addEventListener("click", () => {
-    // La partita vera si salva col tempo trascorso fin qui, per riprenderla all'uscita.
+    // The real game is saved with the time elapsed so far, to resume it on exit.
     if (step === undefined) ctx.saveGame();
     show(0);
   });

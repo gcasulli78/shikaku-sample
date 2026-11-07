@@ -8,9 +8,9 @@ function recordTime(ms: number | undefined): string {
 }
 
 /**
- * La tabella dei record (pulsante con la coppa): una riga per griglia, livello e variante,
- * in ordine di variante, griglia dalla più piccola e livello. Solo testo nelle celle, mai HTML:
- * i record vengono da localStorage.
+ * The records table (trophy button): one row per grid, level and variant, ordered by variant, grid
+ * from the smallest, and level. Only text in the cells, never HTML: the records come from
+ * localStorage.
  */
 export function showRecords(records: Records, body: HTMLElement, dialog: HTMLDialogElement): void {
   const rows = Object.entries(records)

@@ -1,10 +1,10 @@
-# Controlli a ogni push su qualsiasi branch e a ogni pull request: test, test dell'interfaccia
-# e build. Solo un push su main, se tutto passa, pubblica il gioco su GitHub Pages.
+# Checks on every push to any branch and on every pull request: tests, UI tests and build. Only a
+# push to main, if everything passes, publishes the game to GitHub Pages.
 name: GitHub Pages
 
 on:
   push:
-    # Tutti i branch ma non i tag: il tag di una versione indica un commit già controllato.
+    # All branches but not tags: a release tag points to a commit that was already checked.
     branches: ["**"]
   pull_request:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
 permissions:
   contents: read
 
-# Un push nuovo sullo stesso branch annulla i controlli ancora in corso del precedente.
+# A new push to the same branch cancels the previous one's checks still in progress.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -27,10 +27,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # Stile e regole del codice (Biome): un errore ferma tutto, come un test.
+      # Code style and rules (Biome): an error stops everything, like a test.
       - run: npm run lint
       - run: npm test
-      # Test dell'interfaccia in Chromium, WebKit (Safari) e iPhone: si pubblica solo se passano.
+      # UI tests in Chromium, WebKit (Safari) and iPhone: publishing happens only if they pass.
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4

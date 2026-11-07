@@ -1,12 +1,12 @@
 import { defineConfig } from "vitest/config";
 
-/** Solo per le misure (npm run measure): fuori da npm test, durano minuti. */
+/** Only for the measurements (npm run measure): kept out of npm test, they take minutes. */
 export default defineConfig({
   test: {
     include: ["scripts/measure/*.measure.ts"],
-    // Ogni variante nel suo processo, in parallelo: la misura è tutta calcolo.
+    // Each variant in its own process, in parallel: the measurement is pure computation.
     pool: "forks",
-    // Il riepilogo alla fine (teardown).
+    // The summary at the end (teardown).
     globalSetup: ["scripts/measure/summary.ts"],
   },
 });

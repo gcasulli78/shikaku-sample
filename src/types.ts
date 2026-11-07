@@ -1,4 +1,4 @@
-/** Rettangolo sulla griglia: angolo in alto a sinistra (r, c), altezza h, larghezza w. */
+/** Rectangle on the grid: top-left corner (r, c), height h, width w. */
 export interface Rect {
   r: number;
   c: number;
@@ -7,14 +7,14 @@ export interface Rect {
 }
 
 /**
- * Forma imposta da un indizio: quadrato, rettangolo non quadrato con orientamento
- * libero (oblong), oppure orientato: più largo che alto (wide) o più alto che largo (tall).
+ * Shape imposed by a clue: square, non-square rectangle with free orientation (oblong), or
+ * oriented: wider than tall (wide) or taller than wide (tall).
  */
 export type Shape = "square" | "oblong" | "wide" | "tall";
 
 /**
- * Indizio sulla griglia: il rettangolo che lo contiene deve avere area n (se c'è)
- * e la forma indicata (se c'è). Senza nessuno dei due è un "?": forma e area libere.
+ * Clue on the grid: the rectangle containing it must have area n (if present) and the given shape
+ * (if present). With neither it is a "?": free shape and area.
  */
 export interface Clue {
   r: number;
@@ -23,12 +23,12 @@ export interface Clue {
   shape?: Shape;
 }
 
-/** La forma esatta del rettangolo (mai oblong, che vale per wide e tall insieme). */
+/** The exact shape of the rectangle (never oblong, which stands for wide and tall together). */
 export function shapeOf(rect: Rect): Shape {
   return rect.h === rect.w ? "square" : rect.w > rect.h ? "wide" : "tall";
 }
 
-/** Il rettangolo rispetta area e forma dell'indizio? */
+/** Does the rectangle match the clue's area and shape? */
 export function fits(clue: Clue, rect: Rect): boolean {
   if (clue.n !== undefined && clue.n !== area(rect)) return false;
   if (clue.shape === undefined) return true;
@@ -52,9 +52,9 @@ export interface Puzzle {
   rows: number;
   cols: number;
   clues: Clue[];
-  /** Caselle nere (r * cols + c), da non coprire: solo nella variante Caselle nere. */
+  /** Black cells (r * cols + c), not to be covered: only in the Blocked variant. */
   blocked?: number[];
-  /** Una soluzione (con unicità garantita è l'unica). */
+  /** A solution (with guaranteed uniqueness, the only one). */
   solution: Rect[];
 }
 
@@ -75,7 +75,7 @@ export const PRESETS: { id: string; label: string; size: Size }[] = [
 
 export type Difficulty = "easy" | "medium" | "hard" | "expert" | "master";
 
-/** In ordine crescente: l'indice è il livello usato dal valutatore. */
+/** In increasing order: the index is the level used by the grader. */
 export const DIFFICULTIES: { id: Difficulty; label: string }[] = [
   { id: "easy", label: "Facile" },
   { id: "medium", label: "Medio" },
@@ -85,9 +85,9 @@ export const DIFFICULTIES: { id: Difficulty; label: string }[] = [
 ];
 
 /**
- * Lato minimo per i livelli più alti: sotto non si trovano in tempi ragionevoli
- * (misurato per Esperto: 0/30 a 5×5, 2/15 a 4×15, 13/15 a 7×7 con 3 s;
- * per Maestro: 6/8 a 7×7, 8/8 a 8×8 con 10 s).
+ * Minimum side for the highest levels: below it they can't be found in reasonable time (measured
+ * for Expert: 0/30 at 5×5, 2/15 at 4×15, 13/15 at 7×7 with 3 s; for Master: 6/8 at 7×7, 8/8 at 8×8
+ * with 10 s).
  */
 const MIN_SIDE: Partial<Record<Difficulty, number>> = { expert: 7, master: 8 };
 
@@ -95,14 +95,14 @@ export function minSide(d: Difficulty): number {
   return MIN_SIDE[d] ?? MIN_SIZE;
 }
 
-/** Le difficoltà ottenibili su una griglia di queste dimensioni. */
+/** The difficulties obtainable on a grid of these dimensions. */
 export function availableDifficulties(size: Size): Difficulty[] {
   return DIFFICULTIES.map((d) => d.id).filter((id) => Math.min(size.rows, size.cols) >= minSide(id));
 }
 
 /**
- * Tempo di generazione concesso per livello, in ms. Difficile 3 s (era 1,5): col filtro dei
- * suggerimenti (hintsExplained) sul 15×15 Forme ne serve di più; le altre griglie restano sotto 0,35 s.
+ * Generation time allowed per level, in ms. Hard 3 s (was 1.5): with the hint filter (hintsExplained)
+ * 15×15 Shapes needs more; the other grids stay below 0.35 s.
  */
 export const TIME_LIMITS: Record<Difficulty, number> = { easy: 1000, medium: 1000, hard: 3000, expert: 3000, master: 10000 };
 
@@ -119,20 +119,20 @@ export function difficultyLabel(d: Difficulty): string {
 }
 
 /**
- * Se il suggerimento spiega (a gradi, con il motivo) su questo livello e variante. Qui il
- * generatore tiene solo puzzle che si risolvono fino in fondo con le deduzioni dei
- * suggerimenti (solvableByDeduction). Misurato il 2026-10-31 (10 puzzle per griglia): passa
- * l'83% o più dei Classico e Caselle nere fino a Esperto e il 72% delle Forme a Difficile,
- * ma solo il 23–60% a Maestro e il 21% delle Forme a Esperto (0% sul 15×15). Lì, deciso
- * dall'utente, il suggerimento non spiega (posa subito un pezzo o toglie gli errori).
+ * Whether the hint explains (in steps, with the reason) on this level and variant. Here the
+ * generator only keeps puzzles that can be solved all the way with the hint deductions
+ * (solvableByDeduction). Measured on 2026-10-31 (10 puzzles per grid): 83% or more of Classic and
+ * Blocked pass up to Expert and 72% of Shapes at Hard, but only 23–60% at Master and 21% of Shapes
+ * at Expert (0% on 15×15). There, as decided by the user, the hint doesn't explain (it immediately
+ * places a piece or removes the errors).
  */
 export function hintsExplained(variant: Variant, difficulty: Difficulty): boolean {
   return difficulty !== "master" && !(variant === "shapes" && difficulty === "expert");
 }
 
 /**
- * Suggerimenti per partita, per livello (decisi dall'utente, uguali per ogni griglia e
- * variante): si contano i pezzi posati e gli errori tolti, non i gradi. undefined: senza limite.
+ * Hints per game, per level (decided by the user, the same for every grid and variant): placed
+ * pieces and removed errors count, not steps. undefined: unlimited.
  */
 export const HINT_LIMITS: Record<Difficulty, number | undefined> = {
   easy: undefined,
@@ -142,7 +142,7 @@ export const HINT_LIMITS: Record<Difficulty, number | undefined> = {
   master: 2,
 };
 
-/** Verifiche per partita, per livello (decise dall'utente). undefined: senza limite. */
+/** Checks per game, per level (decided by the user). undefined: unlimited. */
 export const CHECK_LIMITS: Record<Difficulty, number | undefined> = {
   easy: undefined,
   medium: 5,
@@ -172,7 +172,7 @@ export function sameRect(a: Rect, b: Rect): boolean {
   return a.r === b.r && a.c === b.c && a.h === b.h && a.w === b.w;
 }
 
-/** Rettangolo che ha come angoli opposti le due celle date. */
+/** Rectangle having the two given cells as opposite corners. */
 export function rectFromCorners(r1: number, c1: number, r2: number, c2: number): Rect {
   return {
     r: Math.min(r1, r2),

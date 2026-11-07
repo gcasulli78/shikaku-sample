@@ -1,7 +1,7 @@
-/** Posizionare elementi sulla griglia CSS della partita. */
+/** Placing elements on the game's CSS grid. */
 import type { Rect } from "./types";
 
-/** Una casella della griglia (le linee tratteggiate), senza il bordo esterno. */
+/** A grid cell (the dashed lines), without the outer border. */
 export function gridCell(r: number, c: number, rows: number, cols: number): HTMLDivElement {
   const cell = document.createElement("div");
   cell.className = "cell";

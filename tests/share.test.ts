@@ -36,15 +36,15 @@ describe("link condivisibile", () => {
     expect(decodePuzzle("!!!")).toBeUndefined();
     const p = generate({ rows: 5, cols: 5, seed: 1 });
     const code = encodePuzzle({ ...p, variant: "classic" });
-    expect(decodePuzzle(code.slice(0, -1))).toBeUndefined(); // ultimo indizio troncato
-    // Senza il primo indizio le aree non coprono più la griglia.
+    expect(decodePuzzle(code.slice(0, -1))).toBeUndefined(); // last clue truncated
+    // Without the first clue the areas no longer cover the grid.
     expect(puzzleFromCode(encodePuzzle({ ...p, clues: p.clues.slice(1), variant: "classic" }))).toBeUndefined();
-    // Un numero più grande della griglia.
+    // A number larger than the grid.
     expect(decodePuzzle(encodePuzzle({ rows: 4, cols: 4, clues: [{ r: 0, c: 0, n: 255 }], variant: "classic" }))).toBeUndefined();
   });
 
   it("un link costruito per far esplodere il solver si rifiuta entro il tempo limite", () => {
-    // 12 indizi senza numero su un 15×15: prima teneva il solver occupato 36 s.
+    // 12 clues without a number on a 15×15: it used to keep the solver busy for 36 s.
     const code = "AQEPD3wBLgBZAJsBvwCYABwBMgBbAD8B0wBFAA";
     expect(decodePuzzle(code)).toBeDefined();
     const start = performance.now();
@@ -65,8 +65,8 @@ describe("record", () => {
 
   it("conta le vittorie e festeggia solo i record battuti", () => {
     const records: Records = {};
-    expect(recordWin(records, "k", 60_000, false)).toEqual({ best: false, bestClean: false }); // prima vittoria
-    expect(recordWin(records, "k", 70_000, true)).toEqual({ best: false, bestClean: false }); // primo senza aiuti
+    expect(recordWin(records, "k", 60_000, false)).toEqual({ best: false, bestClean: false }); // first win
+    expect(recordWin(records, "k", 70_000, true)).toEqual({ best: false, bestClean: false }); // first without help
     expect(recordWin(records, "k", 50_000, false)).toEqual({ best: true, bestClean: false });
     expect(recordWin(records, "k", 40_000, true)).toEqual({ best: true, bestClean: true });
     expect(records.k).toEqual({ wins: 4, best: 40_000, bestClean: 40_000 });

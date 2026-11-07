@@ -46,27 +46,27 @@ import {
   type Variant,
 } from "./types";
 
-/** Il puzzle nel link: indirizzo#p=codice (vedi share.ts). */
+/** The puzzle in the link: address#p=code (see share.ts). */
 const LINK_PREFIX = "#p=";
 
-/** Livelli lenti da generare: mentre si gioca se ne prepara già il prossimo. */
+/** Levels that are slow to generate: while playing, the next one is already being prepared. */
 const PREFETCH: Difficulty[] = ["expert", "master"];
-/** Puzzle pronti conservati al massimo (uno per griglia e livello). */
+/** Maximum ready puzzles kept (one per grid and level). */
 const MAX_READY = 6;
 
-/** Cosa si chiede al generatore per una partita. */
+/** What the generator is asked for a game. */
 interface Choice {
   size: Size;
   difficulty: Difficulty;
   variant: Variant;
 }
 
-/** Ogni quanti ms la spiegazione passa al passo successivo (o con un tocco sulla frase). */
+/** Every how many ms the explanation moves to the next step (or with a tap on the sentence). */
 const FRAME_MS = 3500;
 
 /**
- * La riga di stato: il livello in evidenza (se c'è) e il testo. Si scrive con nodi DOM,
- * mai come HTML: la nota arriva anche dalla partita salvata in localStorage.
+ * The status line: the level highlighted (if any) and the text. Written with DOM nodes, never as
+ * HTML: the note also comes from the game saved in localStorage.
  */
 interface Status {
   level?: string;
@@ -130,22 +130,22 @@ export function startApp(): void {
 
   const timer = new Timer();
   const generateAsync = createRunner<GenerateResult>();
-  // Un secondo Worker per preparare in anticipo: non viene annullato dalle partite nuove.
+  // A second Worker to prepare in advance: it isn't cancelled by new games.
   const prefetchAsync = createRunner<GenerateResult>();
-  // E uno per i link: un link costruito ad arte può tenere occupato il solver (fino a LINK_TIME_MS).
+  // And one for links: a crafted link can keep the solver busy (up to LINK_TIME_MS).
   const linkAsync = createRunner<LinkedPuzzle>();
   const ready = readStored(READY_KEY, parseReady);
   let pending: { key: string; promise: Promise<GenerateResult | undefined> } | undefined;
-  // Assegnata alla prima generazione; fino ad allora i comandi sono disattivati.
+  // Assigned at the first generation; until then the controls are disabled.
   let game!: Game;
   let difficulty: Difficulty = settings.difficulty;
   let gameVariant: Variant = settings.variant;
   let hues: number[] = [];
-  /** L'animazione d'attesa in corso (startLoader): la ferma. */
+  /** The loading animation in progress (startLoader): stops it. */
   let stopLoader: (() => void) | undefined;
-  /** Partita appena generata: i numeri entrano con un'animazione (vedi render). */
+  /** Freshly generated game: the numbers come in with an animation (see render). */
   let entering = false;
-  /** "il 6 verde": il colore della sua pastiglia (le grigie, i "?", restano senza). */
+  /** "il 6 verde": the color of its pill (the gray ones, the "?", stay without). */
   const nameOf: Namer = (clue, prep = "") => {
     const i = game.puzzle.clues.indexOf(clue);
     const grey = clue.n === undefined && !clue.shape;
@@ -153,17 +153,17 @@ export function startApp(): void {
   };
   let solved = false;
   let lastHint: ShownHint | undefined;
-  /** Quale passo mostra la spiegazione (vedi explainFrames). */
+  /** Which step the explanation shows (see explainFrames). */
   let explainFrame = 0;
-  /** Si sta mostrando una spiegazione con più passi. */
+  /** An explanation with several steps is being shown. */
   const explaining = () => !!lastHint && "explain" in lastHint && explainFrames(lastHint.explain, nameOf).length > 1;
-  /** La riga di stato della partita; dopo un suggerimento al suo posto c'è il motivo. */
+  /** The game's status line; after a hint, the reason takes its place. */
   let gameStatus: Status = { text: "" };
-  /** La nota della riga di stato (" · da un link"…), salvata con la partita. */
+  /** The status line note (" · da un link"…), saved with the game. */
   let gameNote = "";
-  /** Un avviso al posto della riga di stato (link copiato…), fino alla mossa successiva. */
+  /** A notice in place of the status line (link copied…), until the next move. */
   let notice: string | undefined;
-  /** Una mossa toglie il motivo del suggerimento e gli avvisi. */
+  /** A move removes the hint's reason and the notices. */
   const clearMessages = () => {
     lastHint = undefined;
     notice = undefined;
@@ -171,7 +171,7 @@ export function startApp(): void {
   const records = readStored(RECORDS_KEY, parseRecords);
   let request = 0;
 
-  // --- Tema ---
+  // --- Theme ---
   const applyTheme = () => {
     if (settings.theme === "auto") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = settings.theme;
@@ -185,15 +185,15 @@ export function startApp(): void {
   });
   applyTheme();
 
-  // --- Impostazioni: griglia, difficoltà, variante e tema in un riquadro che si apre a richiesta ---
-  // La riga con la scelta attuale apre lo stesso riquadro dell'ingranaggio.
+  // --- Settings: grid, difficulty, variant and theme in a panel that opens on demand ---
+  // The row with the current choice opens the same panel as the gear.
   const toggleSettings = () => {
     settingsPanel.hidden = !settingsPanel.hidden;
     settingsBtn.ariaExpanded = choiceBtn.ariaExpanded = String(!settingsPanel.hidden);
   };
   settingsBtn.addEventListener("click", toggleSettings);
   choiceBtn.addEventListener("click", toggleSettings);
-  /** "10×10 · Difficile · Forme": quello che i menu chiedono per la prossima partita. */
+  /** "10×10 · Difficile · Forme": what the menus ask for the next game. */
   const syncChoice = () => {
     const size = sizeSelect.value === CUSTOM ? `${rowsInput.value}×${colsInput.value}` : sizeSelect.selectedOptions[0]?.text;
     const parts = [size, difficultyLabel(difficultySelect.value as Difficulty), variantLabel(variantSelect.value as Variant)];
@@ -201,14 +201,14 @@ export function startApp(): void {
   };
   settingsPanel.addEventListener("change", syncChoice);
 
-  // --- Scelta dimensione ---
+  // --- Size choice ---
   for (const preset of PRESETS) sizeSelect.add(new Option(preset.label, preset.id));
   sizeSelect.add(new Option("Personalizzata…", CUSTOM));
   for (const input of [rowsInput, colsInput]) {
     input.min = String(MIN_SIZE);
     input.max = String(MAX_SIZE);
   }
-  // Le impostazioni sono già controllate da parseSettings.
+  // The settings are already checked by parseSettings.
   sizeSelect.value = settings.sizeId;
   rowsInput.value = String(settings.custom.rows);
   colsInput.value = String(settings.custom.cols);
@@ -231,7 +231,7 @@ export function startApp(): void {
     return size;
   };
 
-  /** Esperto e Maestro non sono proponibili sulle griglie piccole: l'opzione si disattiva. */
+  /** Expert and Master can't be offered on small grids: the option is disabled. */
   const syncDifficulties = () => {
     const available = availableDifficulties(chosenSize());
     for (const option of difficultySelect.options) {
@@ -241,7 +241,7 @@ export function startApp(): void {
     }
   };
 
-  // --- Puzzle pronti in anticipo ---
+  // --- Puzzles prepared in advance ---
   const readyKey = ({ size, difficulty, variant }: Choice) => `${size.rows}x${size.cols}:${difficulty}:${variant}`;
 
   const optionsFor = ({ size, difficulty, variant }: Choice, timeFactor = 1): GenerateOptions => ({
@@ -252,7 +252,7 @@ export function startApp(): void {
     timeLimitMs: timeFactor * TIME_LIMITS[difficulty],
   });
 
-  /** Conserva un puzzle per dopo, solo se è di un livello lento e proprio del livello chiesto. */
+  /** Keeps a puzzle for later, only if it is of a slow level and exactly of the requested level. */
   const store = (choice: Choice, puzzle: GenerateResult) => {
     if (!PREFETCH.includes(choice.difficulty) || puzzle.difficulty !== choice.difficulty || !puzzle.logical) return;
     const key = readyKey(choice);
@@ -263,7 +263,7 @@ export function startApp(): void {
     writeJson(READY_KEY, ready);
   };
 
-  /** Prepara in background il prossimo puzzle di un livello lento, se non ce n'è già uno. */
+  /** Prepares in the background the next puzzle of a slow level, if there isn't one already. */
   const prefetch = (choice: Choice) => {
     const key = readyKey(choice);
     if (!PREFETCH.includes(choice.difficulty) || ready[key] || pending?.key === key) return;
@@ -275,7 +275,7 @@ export function startApp(): void {
     });
   };
 
-  /** Puzzle pronto (anche in preparazione), altrimenti generato al momento. Non lo toglie dai pronti. */
+  /** Ready puzzle (even one being prepared), otherwise generated on the spot. Doesn't remove it from the ready ones. */
   const obtain = async (choice: Choice) => {
     const key = readyKey(choice);
     if (!ready[key] && pending?.key === key) await pending.promise;
@@ -318,7 +318,7 @@ export function startApp(): void {
     const puzzle = await obtain(choice);
     if (!puzzle) return;
     if (id !== request) {
-      // Nel frattempo è stata chiesta un'altra partita: un puzzle buono si tiene per dopo.
+      // Meanwhile another game was requested: a good puzzle is kept for later.
       store(choice, puzzle);
       return;
     }
@@ -332,15 +332,15 @@ export function startApp(): void {
     else if (!puzzle.logical) note = " · oltre Maestro: potrebbe servire andare per tentativi";
     else if (puzzle.difficulty !== chosen) note = ` · non ho trovato un ${difficultyLabel(chosen)} in tempo, eccone uno vicino`;
     entering = true;
-    // Il tempo di entrare (onda al massimo 0,7 s + 0,35 s): poi i render normali.
+    // Time to come in (wave at most 0.7 s + 0.35 s): then normal renders.
     setTimeout(() => (entering = false), 1200);
     startGame(puzzle, variant, { note });
     prefetch(choice);
   };
 
   /**
-   * Mette in gioco un puzzle: nuovo, da un link, ripreso dal salvataggio (saved) o del
-   * tutorial (status: la riga di stato al posto di livello e griglia).
+   * Puts a puzzle in play: new, from a link, resumed from the save (saved) or from the tutorial
+   * (status: the status line in place of level and grid).
    */
   const startGame = (
     puzzle: GenerateResult,
@@ -348,14 +348,14 @@ export function startApp(): void {
     options: { note?: string; saved?: SavedState; status?: string; hintCooldown?: number } = {},
   ) => {
     const { note = "", saved, hintCooldown } = options;
-    request++; // una generazione ancora in corso non sostituisce questa partita
+    request++; // a generation still in progress doesn't replace this game
     newBtn.disabled = false;
     stopLoader?.();
     stopLoader = undefined;
     board.classList.remove("busy");
     const { rows, cols } = puzzle;
-    // Suggerimenti e verifiche limitati per livello; a Maestro e Forme Esperto il suggerimento
-    // non spiega. Nel tutorial niente limiti: insegna proprio con le spiegazioni.
+    // Hints and checks limited per level; at Master and Shapes Expert the hint doesn't explain. In
+    // the tutorial no limits: it teaches precisely through the explanations.
     const tutorial = options.status !== undefined;
     const gameOptions = tutorial
       ? { hintCooldown }
@@ -371,8 +371,8 @@ export function startApp(): void {
     hues = assignHues(puzzle.clues);
     solved = false;
     clearMessages();
-    // Il cronometro parte quando la griglia è in gioco (anche ripresa) e si ferma solo alla
-    // vittoria: tempo a pagina aperta, deciso dall'utente. A pagina chiusa conta il salvato.
+    // The stopwatch starts when the grid is in play (even resumed) and stops only at the win: time
+    // with the page open, decided by the user. With the page closed the saved time counts.
     timer.reset(saved?.elapsed ?? 0);
     timer.start();
     legend.hidden = variant !== "shapes";
@@ -389,7 +389,7 @@ export function startApp(): void {
     render();
   };
 
-  /** Salva la partita in corso; una partita vinta non si riprende. */
+  /** Saves the game in progress; a won game isn't resumed. */
   const save = () => {
     if (tutorial.active()) return;
     if (solved) return removeKey(GAME_KEY);
@@ -405,7 +405,7 @@ export function startApp(): void {
 
   sizeSelect.addEventListener("change", () => {
     syncCustom();
-    // newGame sincronizza da sé le difficoltà; con Personalizzata la partita parte solo su richiesta.
+    // newGame syncs the difficulties by itself; with Custom the game starts only on request.
     if (sizeSelect.value === CUSTOM) syncDifficulties();
     else void newGame();
   });
@@ -434,7 +434,7 @@ export function startApp(): void {
     else setStatus(gameStatus);
     statusEl.classList.toggle("stepper", !notice && explaining());
 
-    // Linee della griglia sotto i rettangoli, numeri sopra.
+    // Grid lines below the rectangles, numbers above.
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = gridCell(r, c, rows, cols);
@@ -454,8 +454,8 @@ export function startApp(): void {
       board.append(el);
     });
 
-    // Il suggerimento ha tolto rettangoli sbagliati: li mostra mentre svaniscono, e resta
-    // il contorno di quello spiegato.
+    // The hint removed wrong rectangles: shows them while they fade, and the outline of the
+    // explained one stays.
     if (lastHint && "removed" in lastHint) {
       for (const rect of lastHint.removed) {
         const el = document.createElement("div");
@@ -471,10 +471,9 @@ export function startApp(): void {
       }
     }
 
-    // Il motivo del suggerimento: la casella decisiva e gli indizi coinvolti lampeggiano.
-    // La spiegazione, un passo alla volta: la forma provata e i pezzi che renderebbe
-    // obbligati, tratteggiati nella tinta del loro indizio; le caselle di cui parla la frase,
-    // l'indizio di cui parla cerchiato, e il problema in rosso.
+    // The hint's reason: the decisive cell and the clues involved flash. The explanation, one step
+    // at a time: the tried shape and the pieces it would make forced, dashed in their clue's hue;
+    // the cells the sentence talks about, the clue it talks about circled, and the problem in red.
     if (lastHint && "explain" in lastHint) {
       const frames = explainFrames(lastHint.explain, nameOf);
       const frame = frames[explainFrame % frames.length]!;
@@ -520,11 +519,11 @@ export function startApp(): void {
       if (clue.shape) el.classList.add("shaped");
       cellArea(el, clue.r, clue.c);
       el.ariaLabel = clueLabel(clue);
-      // La forma della pastiglia dice il vincolo; cerchio con solo il numero, grigia col "?".
+      // The pill's shape tells the constraint; circle with just the number, gray with the "?".
       const pill = document.createElement("span");
       pill.className = `pill ${clue.shape ?? (clue.n === undefined ? "any" : "")}`.trimEnd();
       tint(pill, hues[i]!);
-      // Partita appena generata: i numeri entrano a onda, dall'angolo in alto a sinistra.
+      // Freshly generated game: the numbers come in as a wave, from the top-left corner.
       if (entering) {
         pill.classList.add("enter");
         pill.style.animationDelay = `${Math.min((clue.r + clue.c) * 35, 700)}ms`;
@@ -546,11 +545,11 @@ export function startApp(): void {
     renderTimer();
   };
 
-  /** Al terzo grado, finché non sono passati 15 s dall'ultimo pezzo suggerito, conto alla rovescia. */
+  /** At the third step, until 15 s have passed since the last hinted piece, countdown. */
   const syncHintButton = () => {
     const left = game.hintsLeft;
     if (left !== undefined && (left === 0 || game.hintStage === 0)) {
-      // Con un limite, al grado 0 quanti ne restano (senza spiegazioni il grado resta 0).
+      // With a limit, at step 0 how many are left (without explanations the step stays 0).
       const label = left === 0 ? "Suggerimenti finiti" : `${HINT_LABELS[0]} (${left})`;
       hintBtn.disabled = solved || left === 0;
       if (hintBtn.textContent !== label) hintBtn.textContent = label;
@@ -559,7 +558,7 @@ export function startApp(): void {
     const wait = game.hintStage === 2 ? game.cooldown(timer.elapsed()) : 0;
     const label = wait > 0 ? `${HINT_LABELS[2]} (${secondsLeft(wait)})` : HINT_LABELS[game.hintStage]!;
     hintBtn.disabled = solved || wait > 0;
-    // Chiamata dal cronometro 4 volte al secondo: si scrive solo se cambia.
+    // Called by the stopwatch 4 times per second: written only if it changes.
     if (hintBtn.textContent !== label) hintBtn.textContent = label;
   };
 
@@ -583,16 +582,16 @@ export function startApp(): void {
       board.append(preview);
     }
     gridArea(preview, rect);
-    // La scritta va nella metà opposta a quella del dito, per non finirci sotto.
+    // The label goes in the half opposite the finger, so it doesn't end up under it.
     const half = (v: number, from: number, size: number) => (v - from < size / 2 ? "end" : "start");
     preview.style.placeItems = `${half(at[0], rect.r, rect.h)} ${half(at[1], rect.c, rect.w)}`;
     preview.classList.toggle("blocked", game.intent(rect) === "blocked");
-    // ✓ quando il rettangolo rispetta il suo indizio (utile soprattutto con le forme).
+    // ✓ when the rectangle matches its clue (useful especially with shapes).
     const label = area(rect) > 1 ? `${rect.h}×${rect.w}=${area(rect)}` : "";
     preview.textContent = game.isValid(rect) ? `${label} ✓` : label;
   };
 
-  /** Dopo ogni cambiamento della griglia: vittoria, salvataggio, disegno. */
+  /** After every grid change: win, save, draw. */
   const afterMove = () => {
     if (game.isSolved()) {
       solved = true;
@@ -627,7 +626,7 @@ export function startApp(): void {
     if (solved) winDialog.showModal();
   };
 
-  // --- Input: trascinamento con Pointer Events (mouse e touch) ---
+  // --- Input: dragging with Pointer Events (mouse and touch) ---
   const cellFromPoint = (x: number, y: number): [number, number] => {
     const box = board.getBoundingClientRect();
     const { rows, cols } = game.puzzle;
@@ -656,11 +655,11 @@ export function startApp(): void {
     showPreview(drag.sel);
   });
 
-  /** Posa la selezione disegnata col mouse, col dito o da tastiera. */
+  /** Places the selection drawn with the mouse, the finger or the keyboard. */
   const commitRect = (sel: Selection) => {
     const rect = selectionRect(sel);
     const intent = game.intent(rect);
-    // "blocked" e "none": la griglia non cambia, quindi il suggerimento evidenziato resta.
+    // "blocked" and "none": the grid doesn't change, so the highlighted hint stays.
     if (intent === "remove") game.remove(game.rectAt(...selectionStart(sel))!);
     else if (intent === "place") game.place(rect);
     else return render();
@@ -679,7 +678,7 @@ export function startApp(): void {
   board.addEventListener("pointerup", (e) => endDrag(e, true));
   board.addEventListener("pointercancel", (e) => endDrag(e, false));
 
-  // --- Tastiera: un cursore sulla griglia (keyboard.ts) ---
+  // --- Keyboard: a cursor on the grid (keyboard.ts) ---
   const keys = setupKeyboard({
     board,
     sr: srEl,
@@ -696,8 +695,8 @@ export function startApp(): void {
     clearPreview: () => clearPreview(),
   });
 
-  // --- Azioni ---
-  // Anche Annulla può completare la griglia (rimettendo un pezzo tolto): passa da afterMove.
+  // --- Actions ---
+  // Undo can also complete the grid (by putting back a removed piece): it goes through afterMove.
   const undo = () => {
     game.undo();
     clearMessages();
@@ -712,7 +711,7 @@ export function startApp(): void {
   hintBtn.addEventListener("click", () => {
     const hint = game.hint(timer.elapsed());
     if (hint && "wait" in hint) {
-      // Troppo presto per un altro pezzo: restano evidenziati indizio e motivo già mostrati.
+      // Too early for another piece: the clue and reason already shown stay highlighted.
       notice = `Il prossimo pezzo si può mostrare tra ${secondsLeft(hint.wait)}.`;
       return render();
     }
@@ -722,8 +721,8 @@ export function startApp(): void {
     restartSteps();
     afterMove();
   });
-  // La spiegazione scorre i suoi passi da sola, mai durante un trascinamento; un tocco sulla
-  // frase passa subito al passo dopo e fa ripartire l'attesa.
+  // The explanation goes through its steps by itself, never during a drag; a tap on the sentence
+  // moves right to the next step and restarts the wait.
   let stepTimer: ReturnType<typeof setInterval> | undefined;
   const nextStep = () => {
     if (!explaining() || preview) return;
@@ -754,17 +753,17 @@ export function startApp(): void {
     render();
   });
 
-  // --- Condividere ---
+  // --- Sharing ---
   shareBtn.addEventListener("click", async () => {
     const { rows, cols, clues, blocked } = game.puzzle;
     const url = location.href.split("#")[0] + LINK_PREFIX + encodePuzzle({ rows, cols, clues, blocked, variant: gameVariant });
-    // Sul telefono il menu di condivisione, sul computer il link copiato.
+    // On the phone the share menu, on the computer the copied link.
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       try {
         await navigator.share({ title: `Shikaku ${rows}×${cols} · ${difficultyLabel(difficulty)}`, url });
         return;
       } catch {
-        // Condivisione annullata o non riuscita: si copia il link.
+        // Sharing cancelled or failed: the link is copied.
       }
     }
     clearMessages();
@@ -777,7 +776,7 @@ export function startApp(): void {
     render();
   });
 
-  // --- Record (records-dialog.ts) ---
+  // --- Records (records-dialog.ts) ---
   recordsBtn.addEventListener("click", () => showRecords(records, recordsBody, recordsDialog));
   document.addEventListener("keydown", (e) => {
     if (!game || solved || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -794,8 +793,8 @@ export function startApp(): void {
     if (winDialog.returnValue === "new") void newGame();
   });
 
-  // Il cronometro non si ferma con la scheda nascosta (deciso dall'utente): nascondendola si
-  // salva soltanto il tempo trascorso, nel caso il browser chiuda la pagina.
+  // The stopwatch doesn't stop with the tab hidden (decided by the user): hiding it only saves the
+  // elapsed time, in case the browser closes the page.
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && game) save();
   });
@@ -803,7 +802,7 @@ export function startApp(): void {
     if (game) save();
   });
 
-  // --- Tutorial: griglie scritte a mano, giocate sulla griglia vera (tutorial-panel.ts) ---
+  // --- Tutorial: hand-written grids, played on the real grid (tutorial-panel.ts) ---
   const tutorial = setupTutorial({
     button: tutorialBtn,
     panel: tutorialPanel,
@@ -823,24 +822,24 @@ export function startApp(): void {
     },
   });
 
-  /** Riprende la partita salvata; false se non ce n'è una. */
+  /** Resumes the saved game; false if there isn't one. */
   function resume(): boolean {
     const saved = readStored(GAME_KEY, parseSavedState);
     if (!saved) return false;
-    // I menu restano quelli salvati nelle impostazioni, con il livello scelto (non quello misurato).
+    // The menus stay as saved in the settings, with the chosen level (not the measured one).
     syncDifficulties();
     try {
       startGame(saved.puzzle, saved.variant, { saved, note: saved.note });
     } catch {
-      // Una partita salvata che supera i controlli ma non si riesce a riprendere: se ne inizia un'altra.
+      // A saved game that passes the checks but can't be resumed: a new one starts.
       removeKey(GAME_KEY);
       return false;
     }
     return true;
   }
 
-  // --- Avvio: un puzzle dal link, altrimenti la partita salvata, altrimenti una nuova ---
-  /** Allinea i menu al puzzle di un link, così "Nuova partita" ne propone uno simile. */
+  // --- Startup: a puzzle from the link, otherwise the saved game, otherwise a new one ---
+  /** Aligns the menus with a link's puzzle, so "Nuova partita" offers a similar one. */
   const syncControls = (puzzle: GenerateResult, variant: Variant) => {
     const preset = PRESETS.find((p) => p.size.rows === puzzle.rows && p.size.cols === puzzle.cols);
     sizeSelect.value = preset?.id ?? CUSTOM;
@@ -855,10 +854,10 @@ export function startApp(): void {
   let linkRequest = 0;
 
   /**
-   * Apre il puzzle del link nell'indirizzo, se c'è ("none" se non c'è, "bad" se rovinato,
-   * "stale" se nel frattempo è arrivato un altro link o è iniziata un'altra partita).
-   * Soluzione e livello si calcolano nel Worker: un link costruito ad arte non blocca la pagina.
-   * L'indirizzo si ripulisce: ricaricando si riprende la partita salvata, non il link da capo.
+   * Opens the link's puzzle in the address, if present ("none" if there is none, "bad" if
+   * corrupted, "stale" if meanwhile another link arrived or another game started). Solution and
+   * level are computed in the Worker: a crafted link doesn't block the page. The address gets
+   * cleaned up: reloading resumes the saved game, not the link from scratch.
    */
   const openLink = async (): Promise<"ok" | "bad" | "none" | "stale"> => {
     if (!location.hash.startsWith(LINK_PREFIX)) return "none";
@@ -866,7 +865,7 @@ export function startApp(): void {
     try {
       history.replaceState(null, "", location.href.split("#")[0]);
     } catch {
-      // Alcuni browser con file://: l'indirizzo resta col link.
+      // Some browsers with file://: the address keeps the link.
     }
     const id = ++linkRequest;
     const gameId = request;
@@ -889,14 +888,14 @@ export function startApp(): void {
     notice = "Il link non contiene un puzzle valido.";
     render();
   };
-  // Un link incollato nella scheda già aperta cambia solo la parte dopo "#".
+  // A link pasted into the already open tab only changes the part after "#".
   addEventListener("hashchange", () => {
     void openLink().then((link) => link === "bad" && warnBadLink());
   });
 
   void openLink().then((link) => {
     if (link === "ok" || link === "stale") {
-      // Si gioca il puzzle del link, o quello iniziato nel frattempo.
+      // The link's puzzle is played, or the one started in the meantime.
     } else if (resume()) {
       if (link === "bad") warnBadLink();
     } else {

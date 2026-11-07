@@ -1,6 +1,6 @@
 # Shikaku — note per Claude
 
-Gioco Shikaku nel browser, per uso personale e con amici. Testi dell'interfaccia, commenti e messaggi di commit in italiano.
+Gioco Shikaku nel browser, per uso personale e con amici. Testi dell'interfaccia e messaggi di commit in italiano; commenti nel codice in inglese, come il codice (deciso dall'utente il 2026-11-07). Nei commenti i testi citati dall'interfaccia restano come sono ("Nessuna deduzione semplice", "il 6 verde").
 
 ## Comandi
 

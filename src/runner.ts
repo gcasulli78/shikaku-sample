@@ -2,10 +2,9 @@ import { type Job, runJob } from "./jobs";
 import GeneratorWorker from "./worker?worker&inline";
 
 /**
- * Lavora nel Worker (genera un puzzle o apre un link); se non si può creare (browser
- * vecchi), nel thread principale. Una nuova richiesta annulla quella in corso: il Worker
- * viene ricreato e la vecchia promessa si risolve con undefined. R è il risultato dei
- * lavori che si chiedono a questa istanza.
+ * Works in the Worker (generates a puzzle or opens a link); if it can't be created (old browsers),
+ * on the main thread. A new request cancels the one in progress: the Worker is recreated and the
+ * old promise resolves with undefined. R is the result of the jobs requested from this instance.
  */
 export function createRunner<R>(): (job: Job) => Promise<R | undefined> {
   let worker: Worker | undefined;
@@ -14,7 +13,7 @@ export function createRunner<R>(): (job: Job) => Promise<R | undefined> {
   let nextId = 0;
 
   const fallback = (task: NonNullable<typeof current>) => {
-    // Lascia al browser il tempo di mostrare "Generazione…" prima di bloccarsi.
+    // Gives the browser time to show "Generazione…" before blocking.
     setTimeout(() => task.resolve(current === task ? (runJob(task.job) as R | undefined) : undefined), 30);
   };
 

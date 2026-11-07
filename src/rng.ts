@@ -1,4 +1,4 @@
-/** Generatore pseudo-casuale con seed (mulberry32): restituisce numeri in [0, 1). */
+/** Seeded pseudo-random generator (mulberry32): returns numbers in [0, 1). */
 export type Rng = () => number;
 
 export function createRng(seed: number): Rng {

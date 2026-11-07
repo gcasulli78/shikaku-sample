@@ -1,7 +1,7 @@
 import type { DeductionKind } from "./grader";
 import type { Clue, Difficulty, Variant } from "./types";
 
-/** Un passo del tutorial: una griglia scritta a mano che si risolve con la regola spiegata. */
+/** A tutorial step: a hand-written grid that is solved with the explained rule. */
 export interface TutorialStep {
   title: string;
   text: string;
@@ -9,9 +9,9 @@ export interface TutorialStep {
   rows: number;
   cols: number;
   clues: Clue[];
-  /** Caselle nere (r * cols + c), solo nella variante Caselle nere. */
+  /** Black cells (r * cols + c), only in the Blocked variant. */
   blocked?: number[];
-  /** Livello del valutatore e come si arriva al primo pezzo suggerito (verificati dai test). */
+  /** Grader level and how the first hinted piece is reached (verified by the tests). */
   level: Difficulty;
   firstRule: DeductionKind;
 }

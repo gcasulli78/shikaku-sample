@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { candidatesFor, clueIndexMap, countSolutions, solve } from "../src/solver";
 import type { Clue } from "../src/types";
 
-/** Griglia scritta a mano: cifre = numeri, "." = cella vuota. */
+/** Hand-written grid: digits = numbers, "." = empty cell. */
 function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
   const clues: Clue[] = [];
   lines.forEach((line, r) => {
@@ -15,7 +15,7 @@ function parse(lines: string[]): { rows: number; cols: number; clues: Clue[] } {
 
 describe("solver", () => {
   it("trova l'unica soluzione", () => {
-    // 2 in alto a sinistra può essere solo orizzontale perché il 4 occupa le righe sotto.
+    // The 2 at the top left can only be horizontal because the 4 occupies the rows below.
     const input = parse([
       "2.", //
       "4.",
@@ -30,14 +30,14 @@ describe("solver", () => {
   });
 
   it("si ferma a 2 con soluzioni multiple", () => {
-    // Due 2 in diagonale: si divide per righe oppure per colonne.
+    // Two 2s on a diagonal: split by rows or by columns.
     expect(countSolutions(parse(["2.", ".2"]), 2)).toBe(2);
-    // Con limite più alto le conta tutte: una 2×4 di quattro 2 ne ha 5.
+    // With a higher limit it counts them all: a 2×4 of four 2s has 5.
     expect(countSolutions(parse(["2.2.", ".2.2"]), 10)).toBe(5);
   });
 
   it("restituisce 0 se impossibile", () => {
-    // Le aree sommano 4 ma i due 2 si contendono la stessa colonna.
+    // The areas add up to 4 but the two 2s compete for the same column.
     expect(countSolutions(parse(["2.", "2.", ".."]))).toBe(0);
     expect(countSolutions(parse(["3.", ".."]))).toBe(0);
     expect(countSolutions(parse(["3.", ".1"]))).toBe(0);
@@ -55,7 +55,7 @@ describe("solver", () => {
 describe("caselle nere", () => {
   it("nessun rettangolo le copre, e non vanno coperte", () => {
     //  4 . 1
-    //  . . #     con la casella nera in basso a destra il 4 è il 2×2 a sinistra
+    //  . . #     with the black cell at the bottom right the 4 is the 2×2 on the left
     const input = {
       rows: 2,
       cols: 3,
@@ -71,9 +71,9 @@ describe("caselle nere", () => {
       { r: 0, c: 0, h: 2, w: 2 },
       { r: 0, c: 2, h: 1, w: 1 },
     ]);
-    // Senza la casella nera le aree non tornano.
+    // Without the black cell the areas don't add up.
     expect(countSolutions({ rows: 2, cols: 3, clues: input.clues })).toBe(0);
-    // Un indizio su una casella nera rende il puzzle impossibile.
+    // A clue on a black cell makes the puzzle impossible.
     expect(countSolutions({ ...input, blocked: [0] })).toBe(0);
   });
 });
@@ -94,19 +94,19 @@ describe("indizi con forma e area aperte", () => {
     expect(count({ r: 0, c: 0, shape: "wide" })).toBe(1); // 1×2
     expect(count({ r: 0, c: 0, shape: "tall" })).toBe(1); // 2×1
     expect(count({ r: 0, c: 0, n: 2, shape: "wide" })).toBe(1);
-    expect(count({ r: 0, c: 0, n: 4, shape: "wide" })).toBe(0); // 2×2 è un quadrato
-    // Area 6 su 6×6 dall'angolo: 1×6 e 2×3 orizzontali, 6×1 e 3×2 verticali.
+    expect(count({ r: 0, c: 0, n: 4, shape: "wide" })).toBe(0); // 2×2 is a square
+    // Area 6 on 6×6 from the corner: 1×6 and 2×3 horizontal, 6×1 and 3×2 vertical.
     const big = (clue: Clue) => ({ rows: 6, cols: 6, clues: [clue] });
     const count6 = (clue: Clue) => candidatesFor(big(clue), 0, clueIndexMap(big(clue))).length;
     expect(count6({ r: 0, c: 0, n: 6, shape: "oblong" })).toBe(4);
     expect(count6({ r: 0, c: 0, n: 6, shape: "wide" })).toBe(2);
     expect(count6({ r: 0, c: 0, n: 6, shape: "tall" })).toBe(2);
-    // Con un numero primo l'orientamento lascia una sola forma.
+    // With a prime number the orientation leaves a single shape.
     expect(count6({ r: 0, c: 0, n: 5, shape: "wide" })).toBe(1);
   });
 
   it("l'orientamento rende unica una soluzione che con la croce non lo è", () => {
-    //  ▭ .     in alto a sinistra la croce o l'orizzontale, in basso a destra un ?
+    //  ▭ .     at the top left the cross or the horizontal, at the bottom right a ?
     //  . ?
     const grid = (shape: "oblong" | "wide") => ({
       rows: 2,
@@ -116,7 +116,7 @@ describe("indizi con forma e area aperte", () => {
         { r: 1, c: 1 },
       ],
     });
-    // Croce: 1×2 in alto (resto: 1×2 in basso) oppure 2×1 a sinistra (resto: 2×1 a destra).
+    // Cross: 1×2 at the top (rest: 1×2 at the bottom) or 2×1 on the left (rest: 2×1 on the right).
     expect(countSolutions(grid("oblong"), 10)).toBe(2);
     const wide = solve(grid("wide"), 2);
     expect(wide.count).toBe(1);
@@ -124,7 +124,7 @@ describe("indizi con forma e area aperte", () => {
   });
 
   it("la forma rende unica una soluzione che con ? non lo è", () => {
-    //  ? . □      il □ in alto a destra può essere solo il 2×2 a destra
+    //  ? . □      the □ at the top right can only be the 2×2 on the right
     //  . . .
     const square = {
       rows: 2,

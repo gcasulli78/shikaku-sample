@@ -1,13 +1,13 @@
 /**
- * Le parole del suggerimento, senza DOM: come si chiamano gli indizi ("il 6 verde"), le
- * frasi di ogni grado e i passi della spiegazione con cosa evidenziare. ui.ts le disegna.
+ * The hint's words, without DOM: what the clues are called ("il 6 verde"), the sentences of each
+ * step and the explanation steps with what to highlight. ui.ts draws them.
  */
 import type { Hint, Reason, WrongReason } from "./game";
 import { area, type Clue, type Rect, type Shape } from "./types";
 
 /**
- * Nome a parole della tinta di una pastiglia (vedi HUES): nei suggerimenti "il 6 verde"
- * distingue due 6 meglio di "l'altro 6" (segnalato dall'utente: non si capiva quale).
+ * Name in words of a pill's hue (see HUES): in hints "il 6 verde" tells two 6s apart better than
+ * "l'altro 6" (reported by the user: it wasn't clear which one).
  */
 export const HUE_NAMES: Record<number, string> = {
   25: "rosso",
@@ -22,13 +22,13 @@ export const HUE_NAMES: Record<number, string> = {
 
 export type Prep = "" | "di" | "a";
 
-/** Come si chiama un indizio nelle frasi: con articolo e, se la pastiglia è colorata, il colore. */
+/** What a clue is called in sentences: with the article and, if the pill is colored, the color. */
 export type Namer = (clue: Clue, prep?: Prep) => string;
 
 /**
- * L'indizio con l'articolo, semplice o con di/a: "il 6 verde", "dell'8", "all'indizio blu".
- * Si apostrofano i numeri che si leggono con una vocale (uno, otto, undici, ottanta…).
- * Niente nome della forma ("il 2 non quadrato" suonava strano): il colore basta.
+ * The clue with the article, plain or with di/a: "il 6 verde", "dell'8", "all'indizio blu". Numbers
+ * read starting with a vowel get an apostrophe (uno, otto, undici, ottanta…). No shape name ("il 2
+ * non quadrato" sounded odd): the color is enough.
  */
 export function clueName(clue: Clue, prep: Prep = "", color?: string): string {
   const { n } = clue;
@@ -42,7 +42,7 @@ export function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Riepilogo del motivo quando il pezzo è posato. */
+/** Summary of the reason when the piece is placed. */
 export function reasonText(reason: Reason | undefined, name: Namer): string {
   if (!reason) return "Nessuna deduzione semplice da qui: ecco un pezzo della soluzione.";
   if (reason.kind === "single") return `${capitalize(name(reason.clue))} può stare solo così.`;
@@ -51,10 +51,10 @@ export function reasonText(reason: Reason | undefined, name: Namer): string {
 }
 
 /**
- * Un passo della spiegazione: la frase e cosa si vede. ghost: la forma che si prova
- * (tratteggiata nella tinta del suo indizio); chain: i pezzi che diventerebbero obbligati,
- * ognuno nella tinta del suo indizio; marks: le caselle segnate di cui parla la frase;
- * subject: l'indizio di cui parla, cerchiato; problems: il problema, l'unica cosa in rosso.
+ * One step of the explanation: the sentence and what is shown. ghost: the shape being tried (dashed
+ * in its clue's hue); chain: the pieces that would become forced, each in its clue's hue; marks:
+ * the marked cells the sentence talks about; subject: the clue it talks about, circled; problems:
+ * the problem, the only thing in red.
  */
 export interface Frame {
   text: string;
@@ -65,18 +65,19 @@ export interface Frame {
   problems: { r: number; c: number }[];
 }
 
-/** Un altro indizio nella spiegazione: "l'altro 4 verde" se si chiama come quello che si guarda. */
+/** Another clue in the explanation: "l'altro 4 verde" if it has the same name as the one being looked at. */
 export function otherName(clue: Clue, focus: Clue, name: Namer): string {
   const own = name(clue);
   return clue !== focus && own === name(focus) ? `l'altro ${own.replace(/^(il |l')/, "")}` : own;
 }
 
 /**
- * La spiegazione a passi, una cosa per volta (segnalato dall'utente: tutto in una frase con
- * tutto disegnato insieme non si seguiva). Per ogni forma scartata: si prova la forma ("Proviamo
- * il 2 verde qui, nel tratteggio"), poi un passo per ogni pezzo che diventa obbligato, poi il
- * problema. Le figure si accumulano: nel passo del problema si vede tutta la catena. Alla
- * fine la conclusione. Si guarda un indizio solo e tutto si verifica sulla griglia.
+ * The explanation in steps, one thing at a time (reported by the user: everything in one sentence
+ * with everything drawn together couldn't be followed). For each discarded shape: the shape is
+ * tried ("Proviamo il 2 verde qui, nel tratteggio"), then one step for each piece that becomes
+ * forced, then the problem. The figures accumulate: in the problem step the whole chain is visible.
+ * At the end, the conclusion. Only one clue is looked at and everything can be verified on the
+ * grid.
  */
 export function explainFrames(reason: Reason, name: Namer): Frame[] {
   const focus = reason.clue;
@@ -146,7 +147,7 @@ export function explainFrames(reason: Reason, name: Namer): Frame[] {
   return frames;
 }
 
-/** Cosa chiede la forma di un indizio, per spiegare un rettangolo della forma sbagliata. */
+/** What a clue's shape requires, to explain a rectangle with the wrong shape. */
 export const SHAPE_NEEDS: Record<Shape, string> = {
   square: "un quadrato",
   oblong: "un rettangolo non quadrato",
@@ -154,7 +155,7 @@ export const SHAPE_NEEDS: Record<Shape, string> = {
   tall: "un rettangolo più alto che largo",
 };
 
-/** Perché il rettangolo (evidenziato) è sbagliato, a parole (misplaced: vedi hintText). */
+/** Why the (highlighted) rectangle is wrong, in words (misplaced: see hintText). */
 export function wrongText(why: Exclude<WrongReason, { kind: "misplaced" }>, rect: Rect, name: Namer): string {
   switch (why.kind) {
     case "empty":
@@ -172,15 +173,15 @@ export function wrongText(why: Exclude<WrongReason, { kind: "misplaced" }>, rect
   }
 }
 
-/** "12 s": quanto manca, arrotondato per eccesso. */
+/** "12 s": how long is left, rounded up. */
 export function secondsLeft(ms: number): string {
   return `${Math.ceil(ms / 1000)} s`;
 }
 
-/** Un suggerimento mostrato (l'attesa non si mostra come suggerimento, ma come avviso). */
+/** A shown hint (the cooldown isn't shown as a hint, but as a notice). */
 export type ShownHint = Exclude<Hint, { wait: number }>;
 
-/** "Ne resta 1." / "Suggerimenti finiti." dopo un suggerimento limitato. */
+/** "Ne resta 1." / "Suggerimenti finiti." after a limited hint. */
 export function leftText(left: number): string {
   return left === 0 ? "Suggerimenti finiti." : left === 1 ? "Ne resta 1." : `Ne restano ${left}.`;
 }
@@ -193,7 +194,7 @@ export function hintText(hint: ShownHint, frame: number, name: Namer): string {
   }
   if ("removed" in hint) {
     if (hint.wrong.why.kind === "misplaced") {
-      // Il motivo non si vede dalla griglia: niente frase, il pezzo giusto.
+      // The reason can't be seen from the grid: no sentence, just the correct piece.
       const of = name(hint.wrong.why.clue, "di");
       const where = hint.placed ? "ecco dove va" : "dove va te lo mostro al prossimo suggerimento";
       return hint.removed.length === 1
@@ -214,7 +215,7 @@ export function hintText(hint: ShownHint, frame: number, name: Namer): string {
   return reasonText(hint.reason, name);
 }
 
-/** Le caselle da evidenziare per un suggerimento: indizi e casella decisiva (la spiegazione ha le sue). */
+/** The cells to highlight for a hint: clues and decisive cell (the explanation has its own). */
 export function hintSpots(hint: ShownHint): { r: number; c: number }[] {
   if ("quiet" in hint) return [];
   if ("removed" in hint) {

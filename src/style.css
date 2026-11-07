@@ -11,12 +11,11 @@
   --rect-fill-l: 0.92;
   --rect-fill-c: 0.05;
   --rect-edge-l: 0.62;
-  /* Alternativa HSL dei rettangoli per i browser senza oklch() (vedi @supports in fondo). */
+  /* HSL fallback for rectangles in browsers without oklch() (see @supports at the bottom). */
   --fb-fill-s: 70%;
   --fb-fill-l: 89%;
   --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 6%);
-  /* Pastiglie degli indizi: luminosità uguale per tutte le tinte (OKLCH), così il numero
-     bianco ha lo stesso contrasto su ogni colore. */
+  /* Clue pills: same lightness for all hues (OKLCH), so the white number has the same contrast on every color. */
   --pill-l: 0.55;
   --pill-c: 0.15;
   --black-cell: #34383e;
@@ -69,7 +68,7 @@
   box-sizing: border-box;
 }
 
-/* hidden vince sempre, anche sugli elementi con un display proprio. */
+/* hidden always wins, even on elements with their own display. */
 [hidden] {
   /* biome-ignore lint/complexity/noImportantStyles: deve vincere su ogni display. */
   display: none !important;
@@ -109,7 +108,7 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-/* La scelta attuale (griglia · difficoltà · variante): si tocca per cambiarla. */
+/* The current choice (grid · difficulty · variant): tap it to change it. */
 .btn.choice {
   align-self: flex-start;
   display: inline-flex;
@@ -158,7 +157,7 @@ h1 {
   height: 22px;
 }
 
-/* Riquadri: impostazioni, tutorial, legenda. */
+/* Panels: settings, tutorial, legend. */
 .card {
   padding: 12px 16px;
   border: 1px solid var(--line);
@@ -239,7 +238,7 @@ input,
   font-weight: 600;
 }
 
-/* Pulsanti a pillola: contornato, pieno tenue, e grande per le azioni principali. */
+/* Pill buttons: outlined, soft filled, and large for the main actions. */
 .btn.outline,
 .btn.soft {
   border-radius: 999px;
@@ -348,7 +347,7 @@ input,
   transition: opacity 0.2s;
 }
 
-/* Attesa di un puzzle (startLoader in ui.ts): la griglia si ritaglia da sola. */
+/* Waiting for a puzzle (startLoader in ui.ts): the grid cuts itself up. */
 .board.loading {
   pointer-events: none;
   cursor: progress;
@@ -376,7 +375,7 @@ input,
   }
 }
 
-/* I numeri della partita nuova entrano a onda (ritardo per casella in ui.ts). */
+/* The numbers of the new game come in as a wave (per-cell delay in ui.ts). */
 .pill.enter {
   animation: pill-in 0.35s cubic-bezier(0.3, 1.5, 0.6, 1) both;
 }
@@ -407,13 +406,12 @@ input,
 .board {
   --cols: 5;
   --rows: 5;
-  /* Lato massimo: larghezza disponibile, ma anche l'altezza dello schermo. */
+  /* Maximum side: available width, but also the screen height. */
   width: min(100%, calc((100dvh - 430px) * var(--cols) / var(--rows)));
   min-width: min(100%, 220px);
   aspect-ratio: var(--cols) / var(--rows);
   display: grid;
-  /* minmax(0, …): le caselle restano tutte uguali anche se un contenuto (la scritta
-     dell'anteprima su una colonna stretta) è più largo. */
+  /* minmax(0, …): the cells all stay equal even if some content (the preview label on a narrow column) is wider. */
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
   background: var(--surface);
@@ -444,9 +442,9 @@ input,
   pointer-events: none;
 }
 
-/* Pastiglia dell'indizio: colore proprio (--h, tinta OKLCH), numero bianco; la forma dice
-   il vincolo. Cerchio = solo numero; quadrato; rettangolino orizzontale o verticale;
-   croce = non quadrato con verso libero (linee interne tratteggiate); grigio = "?". */
+/* Clue pill: its own color (--h, OKLCH hue), white number; the shape tells the constraint. Circle =
+   number only; square; small horizontal or vertical rectangle; cross = non-square with free
+   orientation (dashed inner lines); gray = "?". */
 .pill {
   display: grid;
   place-items: center;
@@ -486,7 +484,7 @@ input,
   --cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M29 4H71Q75 4 75 8V25H92Q96 25 96 29V71Q96 75 92 75H75V92Q75 96 71 96H29Q25 96 25 92V75H8Q4 75 4 71V29Q4 25 8 25H25V8Q25 4 29 4Z'/%3E%3C/svg%3E");
 }
 
-/* Sotto il numero (la maschera crea un contesto di sovrapposizione: -1 resta sopra lo sfondo). */
+/* Below the number (the mask creates a stacking context: -1 stays above the background). */
 .pill.oblong::after {
   content: "";
   position: absolute;
@@ -503,7 +501,7 @@ input,
   font-size: calc(100cqw / var(--cols) * 0.36);
 }
 
-/* Legenda delle forme. */
+/* Shape legend. */
 .legend {
   font-size: 0.9rem;
 }
@@ -555,7 +553,7 @@ input,
   height: 2.2em;
 }
 
-/* Casella nera (variante Caselle nere): da non coprire. */
+/* Black cell (Blocked variant): not to be covered. */
 .cell.black {
   background: var(--black-cell);
 }
@@ -591,7 +589,7 @@ input,
   animation: pop 0.5s ease-out;
 }
 
-/* Casella o indizio da cui viene il suggerimento. */
+/* Cell or clue the hint comes from. */
 .hint-mark {
   z-index: 3;
   margin: 1px;
@@ -601,8 +599,8 @@ input,
   animation: blink 0.6s ease-in-out 3 alternate;
 }
 
-/* Spiegazione: la forma provata e i pezzi che renderebbe obbligati, tratteggiati nella
-   tinta del loro indizio (così "il 6 verde" si riconosce sulla griglia). */
+/* Explanation: the shape being tried and the pieces it would make forced, dashed in their clue's
+   hue (so "il 6 verde" can be recognized on the grid). */
 .ghost {
   z-index: 2;
   margin: 3px;
@@ -612,20 +610,20 @@ input,
   background: color-mix(in oklch, oklch(var(--rect-edge-l) 0.15 var(--h, 250)) 14%, transparent);
 }
 
-/* La forma che si sta provando: tratteggio più spesso. */
+/* The shape being tried: thicker dashes. */
 .ghost.tried {
   border-width: 3px;
 }
 
-/* La casella di cui parla la frase ("la casella segnata"): neutra, né rossa né di un
-   indizio. Ferma: a ogni passo lampeggerebbe di nuovo. */
+/* The cell the sentence talks about ("la casella segnata"): neutral, neither red nor a clue's
+   color. Static: at every step it would flash again. */
 .hint-mark.spot {
   border: 3px solid var(--text);
   background: color-mix(in srgb, var(--text) 18%, transparent);
   animation: none;
 }
 
-/* L'indizio di cui parla la frase: cerchiato nella sua tinta. */
+/* The clue the sentence talks about: circled in its hue. */
 .hint-mark.subject {
   margin: -3px;
   border: 4px solid oklch(var(--rect-edge-l) 0.15 var(--h, 250));
@@ -634,13 +632,13 @@ input,
   animation: none;
 }
 
-/* Spiegazione: il problema che crea la forma provata (casella o indizio), l'unica cosa in rosso. */
+/* Explanation: the problem the tried shape creates (cell or clue), the only thing in red. */
 .hint-mark.problem {
   border: 3px solid var(--bad);
   background: color-mix(in srgb, var(--bad) 30%, transparent);
 }
 
-/* Un indizio rimasto senza spazio: anello rosso spesso sopra la pastiglia. */
+/* A clue left without room: thick red ring over the pill. */
 .hint-mark.problem.on-clue {
   margin: -3px;
   border-width: 4px;
@@ -650,12 +648,12 @@ input,
   z-index: 5;
 }
 
-/* La frase della spiegazione: un tocco passa al passo dopo. */
+/* The explanation sentence: a tap moves to the next step. */
 .status.stepper {
   cursor: pointer;
 }
 
-/* Il rettangolo sbagliato di cui il suggerimento spiega il motivo. */
+/* The wrong rectangle whose reason the hint explains. */
 .hint-mark.wrong {
   border: 2px dashed var(--bad);
 }
@@ -666,7 +664,7 @@ input,
   }
 }
 
-/* Cursore da tastiera. */
+/* Keyboard cursor. */
 .cursor {
   z-index: 4;
   margin: -1px;
@@ -702,7 +700,7 @@ input,
   cursor: pointer;
 }
 
-/* Su touch i comandi da tastiera non servono. */
+/* On touch devices the keyboard controls aren't needed. */
 @media (pointer: coarse) {
   .help.keys {
     display: none;
@@ -722,7 +720,7 @@ input,
   font-size: max(11px, calc(100cqw / var(--cols) * 0.26));
   font-weight: 600;
   color: var(--accent);
-  /* Su una colonna sola la scritta sporge invece di andare a capo. */
+  /* On a single column the label overflows instead of wrapping. */
   white-space: nowrap;
 }
 
@@ -839,10 +837,10 @@ dialog#records {
   }
 }
 
-/* Browser senza oklch() (Safari prima di 15.4, Firefox prima di 113): con una var() dentro,
-   la regola oklch() non ricade su quella precedente ma diventa trasparente, e il numero
-   bianco della pastiglia sparirebbe. Qui le stesse tinte in HSL (--hh, da tint() in ui.ts).
-   color-mix() non ha alternativa: dove manca lo sfondo resta trasparente, i bordi restano. */
+/* Browsers without oklch() (Safari before 15.4, Firefox before 113): with a var() inside, the
+   oklch() rule doesn't fall back to the previous one but becomes transparent, and the pill's white
+   number would disappear. Here the same hues in HSL (--hh, from tint() in ui.ts). color-mix() has
+   no fallback: where it's missing the background stays transparent, the borders remain. */
 @supports not (color: oklch(0 0 0)) {
   .pill {
     background: hsl(var(--hh, 207) 60% 42%);
